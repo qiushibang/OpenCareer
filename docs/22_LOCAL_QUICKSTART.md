@@ -42,7 +42,7 @@
 
 ```bash
 python -m pytest tests -q
-python -m pytest extensions/career_mcp/tests -q
+python -m pytest extensions/career_mcp/tests -m 'not ocr_acceptance' -q
 OPENCAR_TEST_LOCAL_INSTALL=1 python -m pytest tests/test_local_installation.py -q
 # Optional browser-test tools (not runtime dependencies)
 python -m pip install playwright
@@ -56,6 +56,11 @@ npx vitest run --maxWorkers=2
 两套 Python 测试包含同名模块，请分别运行。OCR 离线测试会检查工作区残留，
 不要与写入工作区的其他任务并行运行。真实模型、真人麦克风及 Windows 安装验收
 与不联网的回归测试是不同层面的证据。
+
+扫描件文字识别（Optical Character Recognition，OCR）是可选组件；基础安装的
+测试不要求该组件。在支持的环境中安装 `python -m pip install -e '.[ocr,dev]'`
+后，运行 `python -m pytest extensions/career_mcp/tests -m ocr_acceptance -q`
+单独验证实际识别和安装验证器，或去掉 `-m` 运行完整领域测试。
 
 当前自动化发布门槛使用真实本地 Career 页面测试。继承的 `surfaces/gui/e2e/`
 桌面模拟测试仍含旧英文选择器，不能代表中文版产品全部通过；保留为手动

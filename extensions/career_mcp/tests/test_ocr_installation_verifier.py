@@ -3,11 +3,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from extensions.career_mcp.ocr.installation_verifier import main
 
 FIXTURES = Path(__file__).parent / "fixtures" / "ocr"
 
 
+@pytest.mark.ocr_acceptance
 def test_installation_verifier_recognizes_fixture_without_sensitive_output(
     capsys,
 ) -> None:
