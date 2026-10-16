@@ -1,0 +1,14 @@
+{
+  "source_id": "xiaomi-careers",
+  "source_url": "https://hr.xiaomi.com/website/api/agent/searchJobPage?keyword=&cityZhNames=&pageSize=10&pageNum=1",
+  "retrieved_at": "2026-08-05",
+  "content_type": "application/json",
+  "authentication": "none",
+  "reduced": true,
+  "original_job_count": 10,
+  "fixture_job_count": 2,
+  "expected_job_ids": [
+    "7621150010131237158",
+    "7621736061081504041"
+  ]
+}

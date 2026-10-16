@@ -1,0 +1,10 @@
+{
+  "source_id": "kuaishou-social-cn",
+  "company_slug": "kuaishou",
+  "official_entry_url": "https://zhaopin.kuaishou.cn/recruit/#/official/social/?workLocationCode=domestic",
+  "retrieved_at": "2026-08-06",
+  "original_total": 1417,
+  "fixture_total": 2,
+  "reduced": true,
+  "expected_job_ids": ["31947", "29268"]
+}

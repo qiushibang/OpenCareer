@@ -1,0 +1,12 @@
+{
+  "source_id": "baidu-careers",
+  "source_url": "https://talent.baidu.com/jobs/social",
+  "retrieved_at": "2026-08-05",
+  "content_type": "text/html",
+  "authentication": "none",
+  "response_bytes": 49565,
+  "expected_job_ids": [
+    "58320aef-65d5-42e2-9d76-7dd3185af47f",
+    "2af931f5-2f63-48af-8fad-d67c99d4eb0b"
+  ]
+}

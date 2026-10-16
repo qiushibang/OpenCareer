@@ -1,0 +1,79 @@
+name: OCR Gate 0
+
+on:
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            slug: macos-arm64
+            smoke: dist/verify_ocr_runtime/verify_ocr_runtime
+          - os: macos-15-intel
+            slug: macos-x64
+            smoke: dist/verify_ocr_runtime/verify_ocr_runtime
+          - os: windows-latest
+            slug: windows-x64
+            smoke: dist/verify_ocr_runtime/verify_ocr_runtime.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install fixed OCR runtime
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            pyinstaller \
+            rapidocr==3.9.2 \
+            onnxruntime==1.19.2 \
+            opencv-python==4.10.0.84 \
+            numpy==1.26.4 \
+            "pypdfium2>=4,<5" \
+            pillow
+
+      - name: Verify installed runtime offline
+        run: |
+          python packaging/verify_ocr_runtime.py \
+            --manifest-out config/ocr-model-manifest.json \
+            --offline \
+            --fixture extensions/career_mcp/tests/fixtures/ocr/mixed-scanned.pdf \
+            --require-term Python \
+            --require-term 技能 \
+            --json
+
+      - name: Freeze verifier
+        run: |
+          pyinstaller \
+            --clean \
+            --noconfirm \
+            --onedir \
+            --collect-data rapidocr \
+            packaging/verify_ocr_runtime.py
+
+      - name: Verify frozen runtime offline
+        run: |
+          "${{ matrix.smoke }}" \
+            --offline \
+            --fixture extensions/career_mcp/tests/fixtures/ocr/mixed-scanned.pdf \
+            --require-term Python \
+            --require-term 技能 \
+            --json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ocr-gate0-${{ matrix.slug }}
+          path: |
+            dist/verify_ocr_runtime
+            config/ocr-model-manifest.json
+          if-no-files-found: error

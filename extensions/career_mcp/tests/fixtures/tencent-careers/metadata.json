@@ -1,0 +1,19 @@
+{
+  "source_id": "tencent-cdg-experienced",
+  "company_slug": "tencent",
+  "official_entry_url": "https://careers.tencent.com/zh-cn/search.html",
+  "listing_api": "https://careers.tencent.com/tencentcareer/api/post/Query",
+  "detail_api": "https://careers.tencent.com/tencentcareer/api/post/ByPostId",
+  "retrieved_at": "2026-08-05",
+  "scope": {
+    "bg_code": "953",
+    "bg_name": "CDG企业发展事业群"
+  },
+  "original_total": 86,
+  "fixture_total": 2,
+  "reduced": true,
+  "expected_job_ids": [
+    "2041515867862368256",
+    "2084148412080635904"
+  ]
+}

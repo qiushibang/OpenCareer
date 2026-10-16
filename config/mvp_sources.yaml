@@ -1,0 +1,151 @@
+version: 1
+updated_at: 2026-08-04
+
+sources:
+  - id: baidu-careers
+    company_slug: baidu
+    company_name: 百度
+    phase: 1
+    priority: 1
+    enabled: false
+    official: true
+    career_home_url: https://talent.baidu.com/
+    adapter: baidu
+    source_type: investigate
+    crawl_interval_minutes: 720
+    notes: First real adapter. Confirm public API/XHR before implementation.
+
+  - id: xiaomi-careers
+    company_slug: xiaomi
+    company_name: 小米
+    phase: 1
+    priority: 2
+    enabled: false
+    official: true
+    career_home_url: https://hr.xiaomi.com/
+    adapter: xiaomi
+    source_type: investigate
+    crawl_interval_minutes: 720
+    notes: Validate pagination, volume, city and category.
+
+  - id: minimax-careers
+    company_slug: minimax
+    company_name: MiniMax
+    phase: 1
+    priority: 3
+    enabled: false
+    official: true
+    career_home_url: https://www.minimax.io/careers
+    adapter: feishu_or_minimax
+    source_type: investigate
+    crawl_interval_minutes: 720
+    notes: Prefer reusable Feishu adapter only after confirming stable shared contract.
+
+  - id: zhipu-careers
+    company_slug: zhipu
+    company_name: 智谱 AI
+    phase: 1
+    priority: 4
+    enabled: false
+    official: true
+    career_home_url: https://www.zhipuai.cn/zh/joinus
+    adapter: zhipu
+    source_type: investigate
+    crawl_interval_minutes: 720
+
+  - id: deepseek-careers
+    company_slug: deepseek
+    company_name: DeepSeek
+    phase: 1
+    priority: 5
+    enabled: false
+    official: true
+    career_home_url: https://talent.deepseek.com/
+    adapter: deepseek
+    source_type: investigate
+    crawl_interval_minutes: 720
+
+  - id: bytedance-careers
+    company_slug: bytedance
+    company_name: 字节跳动
+    phase: 1
+    priority: 6
+    enabled: false
+    official: true
+    career_home_url: https://jobs.bytedance.com/
+    adapter: bytedance
+    source_type: investigate
+    crawl_interval_minutes: 720
+    notes: High value but dynamic; implement after simpler sources.
+
+  - id: tencent-careers
+    company_slug: tencent
+    company_name: 腾讯
+    phase: 2
+    priority: 7
+    enabled: false
+    official: true
+    career_home_url: https://careers.tencent.com/
+    adapter: tencent
+    source_type: investigate
+    crawl_interval_minutes: 720
+
+  - id: meituan-careers
+    company_slug: meituan
+    company_name: 美团
+    phase: 2
+    priority: 8
+    enabled: false
+    official: true
+    career_home_url: https://zhaopin.meituan.com/
+    adapter: meituan
+    source_type: investigate
+    crawl_interval_minutes: 720
+
+  - id: huawei-careers
+    company_slug: huawei
+    company_name: 华为
+    phase: 2
+    priority: 9
+    enabled: false
+    official: true
+    career_home_url: https://career.huawei.com/
+    adapter: huawei
+    source_type: investigate
+    crawl_interval_minutes: 720
+
+  - id: kuaishou-careers
+    company_slug: kuaishou
+    company_name: 快手
+    phase: 2
+    priority: 10
+    enabled: false
+    official: true
+    career_home_url: https://zhaopin.kuaishou.cn/
+    adapter: kuaishou
+    source_type: investigate
+    crawl_interval_minutes: 720
+
+  - id: xiaohongshu-careers
+    company_slug: xiaohongshu
+    company_name: 小红书
+    phase: 2
+    priority: 11
+    enabled: false
+    official: true
+    career_home_url: https://job.xiaohongshu.com/
+    adapter: xiaohongshu
+    source_type: investigate
+    crawl_interval_minutes: 720
+
+  - id: alibaba-careers
+    company_slug: alibaba
+    company_name: 阿里巴巴
+    phase: 2
+    priority: 12
+    enabled: false
+    official: true
+    career_home_url: https://talent.alibaba.com/
+    adapter: alibaba
+    source_type: investigate
+    crawl_interval_minutes: 720

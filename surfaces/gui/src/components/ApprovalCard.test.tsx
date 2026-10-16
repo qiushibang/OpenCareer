@@ -1,0 +1,327 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { ApprovalCard } from "./ApprovalCard";
+import { InboxItemCard } from "./InboxItemCard";
+import type { Item } from "../types";
+import type { InboxItem } from "../api";
+
+type ApprovalItem = Extract<Item, { kind: "approval" }>;
+
+const RUN_TASK = { id: "task-1", title: "Weekly digest" };
+
+const sendApproval = (extra: Partial<ApprovalItem> = {}): ApprovalItem => ({
+  kind: "approval",
+  name: "send_message",
+  args: { target: "slack:T1/C1", text: "digest" },
+  reason: "requires approval",
+  category: "messaging",
+  ...extra,
+});
+
+afterEach(cleanup);
+
+describe("ApprovalCard — standing scoped approvals (§25)", () => {
+  it("offers Allow every time only with BOTH a run context and an eligible target", () => {
+    const onApprove = vi.fn();
+    // Run context + standing target → offered (and it replaces the session-scoped button).
+    render(
+      <ApprovalCard
+        item={sendApproval({ standingTarget: "slack:T1/C1" })}
+        onApprove={onApprove}
+        runTask={RUN_TASK}
+      />,
+    );
+    fireEvent.click(screen.getByText("本任务始终允许"));
+    expect(onApprove).toHaveBeenCalledWith("always_task");
+    expect(screen.queryByTitle(/在本次对话中始终允许/)).toBeNull();
+    cleanup();
+
+    // No run context (a plain session) → never offered.
+    render(
+      <ApprovalCard item={sendApproval({ standingTarget: "slack:T1/C1" })} onApprove={vi.fn()} />,
+    );
+    expect(screen.queryByText("本任务始终允许")).toBeNull();
+    cleanup();
+
+    // Run context but no eligible target (e.g. run_shell) → never offered.
+    render(
+      <ApprovalCard
+        item={sendApproval({ name: "run_shell", args: { command: "ls" }, standingTarget: undefined })}
+        onApprove={vi.fn()}
+        runTask={RUN_TASK}
+      />,
+    );
+    expect(screen.queryByText("本任务始终允许")).toBeNull();
+  });
+
+  it("renders the create_scheduled_task consent proposal: reads disclose, writes grant", () => {
+    render(
+      <ApprovalCard
+        item={sendApproval({
+          name: "create_scheduled_task",
+          args: {
+            title: "Weekly digest",
+            instructions: "post it",
+            cron: "0 9 * * 1",
+            permissions: [
+              { tool: "send_message", target: "slack:T1/C1", access: "write" },
+              { tool: "github_list_commits", target: "rohit/agent-platform", access: "read" },
+            ],
+          },
+        })}
+        onApprove={vi.fn()}
+      />,
+    );
+    const grants = screen.getByTestId("approval-grants");
+    expect(grants.textContent).toContain("slack:T1/C1");
+    expect(grants.textContent).toContain("批准后始终允许");
+    expect(grants.textContent).toContain("rohit/agent-platform");
+    expect(grants.textContent).toContain("只读");
+    // The raw permissions JSON must not also dump into the args line.
+    expect(screen.queryByText(/permissions=/)).toBeNull();
+  });
+});
+
+describe("ApprovalCard — §35 shapes", () => {
+  it("hides private resume arguments instead of rendering tokens or proposal fields", () => {
+    render(
+      <ApprovalCard
+        item={sendApproval({
+          name: "mcp__career__preview_resume_import",
+          args: {
+            upload_token: "private-upload-token",
+            proposal: { basic: { phone: "15000000000", email: "private@example.com" } },
+          },
+          category: "mcp",
+        })}
+        onApprove={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("私密简历参数已隐藏")).toBeTruthy();
+    expect(screen.queryByText(/private-upload-token/)).toBeNull();
+    expect(screen.queryByText(/15000000000/)).toBeNull();
+    expect(screen.queryByText(/private@example\.com/)).toBeNull();
+  });
+
+  it("routine file writes render as a compact row: humanized title, inline preview, Allow → once", () => {
+    const onApprove = vi.fn();
+    render(
+      <ApprovalCard
+        item={sendApproval({
+          name: "write_file",
+          args: { path: "src/fetch_data.py", content: "import json\nimport urllib\nx=1\ny=2\nz=3\ndone=1" },
+          category: undefined,
+        })}
+        onApprove={onApprove}
+      />,
+    );
+    const row = screen.getByTestId("approval-row");
+    expect(row.textContent).toContain("写入 ");
+    expect(row.textContent).toContain("fetch_data.py");
+    expect(screen.queryByText(/Permission required/i)).toBeNull();
+
+    // Preview expands INLINE from the tool args (the file doesn't exist yet).
+    expect(screen.queryByText(/import json/)).toBeNull();
+    fireEvent.click(screen.getByText(/预览/));
+    expect(screen.getByText(/import json/)).toBeTruthy();
+    expect(screen.getByText("显示全部 6 行")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("允许"));
+    expect(onApprove).toHaveBeenCalledWith("once");
+  });
+
+  it("send_file gets the full external card: destination title, file chip, leaves-the-computer note", () => {
+    render(
+      <ApprovalCard
+        item={sendApproval({
+          name: "send_file",
+          args: { target: "slack:T1/C9:1700.1", path: "out/report.pdf", comment: "here you go" },
+        })}
+        onApprove={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/发送文件到/).textContent).toContain("C9");
+    expect(screen.getByText(/将发送到本机之外 → Slack/)).toBeTruthy();
+    expect(screen.getByText(/report\.pdf/)).toBeTruthy();
+    expect(screen.getByText(/here you go/)).toBeTruthy();
+    expect(screen.getByText("仅允许本次")).toBeTruthy();
+  });
+
+  it("long single-paragraph send_message text is clamped, expandable, and never a wall", () => {
+    // Owner repro 2026-07-15: a one-paragraph Slack digest (no newlines) blew the card
+    // up to full-transcript height — the preview clamped by LINES only.
+    const digest = "aisuite last 24 hours of work: five PRs merged covering streaming, multimodal input, Slack improvements, human attribution, and formatting. ".repeat(8);
+    render(<ApprovalCard item={sendApproval({ args: { target: "slack:T1/C1", text: digest } })} onApprove={vi.fn()} />);
+
+    const prev = document.querySelector(".approval-prev") as HTMLElement;
+    expect(prev.textContent!.length).toBeLessThan(500);
+    fireEvent.click(screen.getByText("显示完整消息"));
+    expect(document.querySelector(".approval-prev")!.textContent!.length).toBeGreaterThan(1000);
+    expect(screen.getByText("收起")).toBeTruthy();
+  });
+
+  it("short send_message text keeps the inline quote (no preview box)", () => {
+    render(<ApprovalCard item={sendApproval()} onApprove={vi.fn()} />);
+    expect(screen.getByText(/“digest”/)).toBeTruthy();
+    expect(document.querySelector(".approval-prev")).toBeNull();
+  });
+
+  it("run_shell titles with the model's description and previews the command", () => {
+    render(
+      <ApprovalCard
+        item={sendApproval({
+          name: "run_shell",
+          args: { command: "python3 fetch.py > data.json", description: "Fetch semiconductor stock data" },
+          category: undefined,
+        })}
+        onApprove={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/执行命令 — fetch semiconductor stock data/)).toBeTruthy();
+    expect(screen.getByText(/python3 fetch\.py/)).toBeTruthy();
+    expect(screen.getByText(/仅在本机执行/)).toBeTruthy();
+    expect(screen.getByText("始终允许此命令")).toBeTruthy();
+  });
+});
+
+describe("InboxItemCard — Allow every time on parked run approvals", () => {
+  const baseItem = (data?: Record<string, any>): InboxItem => ({
+    id: "i1",
+    session_id: "__run__r1",
+    kind: "approval",
+    title: "Run `send_message`?",
+    body: "target: slack:T1/C1",
+    state: "pending",
+    resolution: null,
+    inbox: "default",
+    created_at: "",
+    resolved_at: null,
+    data,
+  });
+
+  it("shows the button only when the item carries the task binding + target", () => {
+    const onResolve = vi.fn();
+    render(
+      <InboxItemCard
+        item={baseItem({ task_id: "task-1", task_title: "Weekly digest", standing_target: "slack:T1/C1" })}
+        onResolve={onResolve}
+      />,
+    );
+    fireEvent.click(screen.getByText("本任务始终允许"));
+    expect(onResolve).toHaveBeenCalledWith("i1", "always_task");
+    cleanup();
+
+    // A plain unattended-session approval (no task data) keeps Approve/Deny only.
+    render(<InboxItemCard item={baseItem()} onResolve={vi.fn()} />);
+    expect(screen.queryByText("本任务始终允许")).toBeNull();
+    expect(screen.getByText("批准")).toBeTruthy();
+    expect(screen.getByText("拒绝")).toBeTruthy();
+  });
+
+  it("parked approvals with tool data wear the §35 dress — same dialect as the live card", () => {
+    const onResolve = vi.fn();
+    render(
+      <InboxItemCard
+        item={baseItem({
+          tool: "write_file",
+          arguments: { path: "src/fetch_data.py", content: "import json\nx = 1" },
+        })}
+        onResolve={onResolve}
+      />,
+    );
+    // Humanized title + preview from the args; the raw "Run `write_file`?" title is gone.
+    expect(screen.getByText("fetch_data.py")).toBeTruthy();
+    expect(screen.queryByText("Run `send_message`?")).toBeNull();
+    expect(screen.getByText(/import json/)).toBeTruthy();
+    expect(screen.getByText(/仅在本机执行/)).toBeTruthy();
+    // §35 labels; resolution vocabulary unchanged (works on every approver path).
+    fireEvent.click(screen.getByText("仅允许本次"));
+    expect(onResolve).toHaveBeenCalledWith("i1", "allow");
+    // Old rows without tool data keep the legacy treatment (covered above).
+  });
+});
+
+describe("ApprovalCard — save_skill (SKILLS-SPEC §5.2)", () => {
+  const skillApproval = (extra: Partial<ApprovalItem> = {}): ApprovalItem =>
+    sendApproval({
+      name: "save_skill",
+      category: "skills",
+      args: {
+        name: "weekly-github-report",
+        description: "Create a concise Monday status report from GitHub activity.",
+        instructions: "1. Fetch PRs\n2. Write the report",
+        files: ["fetch_prs.py", "sub/example-report.md"],
+      },
+      standingTarget: undefined,
+      ...extra,
+    });
+
+  it("shows name-first title, description, instructions, and every bundled file", () => {
+    render(<ApprovalCard item={skillApproval()} onApprove={vi.fn()} />);
+    expect(screen.getByText("weekly-github-report")).toBeTruthy(); // bold obj in the title
+    expect(screen.getAllByText(/到我的 Skill/).length).toBeGreaterThan(0); // title + footer
+    // The corner answers WHERE; the footer answers what approving means (§5.2 review round).
+    expect(screen.getByText("保存到设置 ▸ Skill")).toBeTruthy();
+    expect(screen.getByText(/后续所有对话中使用/)).toBeTruthy();
+    expect(
+      screen.getByText("Create a concise Monday status report from GitHub activity."),
+    ).toBeTruthy();
+    expect(screen.getByText(/Fetch PRs/)).toBeTruthy();
+    const chips = screen.getByTestId("skill-bundle-files");
+    expect(chips.textContent).toContain("fetch_prs.py");
+    expect(chips.textContent).toContain("example-report.md"); // basename, not the path
+  });
+
+  it("uses the §7 button copy and never offers a session-wide always", () => {
+    const onApprove = vi.fn();
+    render(<ApprovalCard item={skillApproval()} onApprove={onApprove} />);
+    expect(screen.queryByTitle(/在本次对话中始终允许/)).toBeNull(); // every proposal gets its own review
+    expect(screen.queryByText("拒绝")).toBeNull();
+    fireEvent.click(screen.getByText("添加到我的 Skill"));
+    expect(onApprove).toHaveBeenCalledWith("once");
+    fireEvent.click(screen.getByText("暂不添加"));
+    expect(onApprove).toHaveBeenCalledWith("deny");
+  });
+});
+
+describe("InboxItemCard — parked save_skill proposals (SKILLS-SPEC §5.2)", () => {
+  const parked = (): InboxItem => ({
+    id: "i9",
+    session_id: "s1",
+    kind: "approval",
+    title: "Run `save_skill`?",
+    body: "",
+    state: "pending",
+    resolution: null,
+    inbox: "default",
+    created_at: "",
+    resolved_at: null,
+    data: {
+      tool: "save_skill",
+      arguments: {
+        name: "weekly-github-report",
+        description: "Create a concise Monday status report from GitHub activity.",
+        instructions: "1. Fetch PRs\n2. Write the report",
+        files: ["fetch_prs.py"],
+      },
+    },
+  });
+
+  it("wears the same review surface and button copy as the live card", () => {
+    const onResolve = vi.fn();
+    render(<InboxItemCard item={parked()} onResolve={onResolve} />);
+    expect(screen.getByText("保存到设置 ▸ Skill")).toBeTruthy();
+    expect(
+      screen.getByText("Create a concise Monday status report from GitHub activity."),
+    ).toBeTruthy();
+    expect(screen.getByText(/Fetch PRs/)).toBeTruthy();
+    expect(screen.getByTestId("skill-bundle-files").textContent).toContain("fetch_prs.py");
+    expect(screen.getByText(/后续所有对话中使用/)).toBeTruthy();
+    expect(screen.queryByText("仅允许本次")).toBeNull();
+    fireEvent.click(screen.getByText("添加到我的 Skill"));
+    expect(onResolve).toHaveBeenCalledWith("i9", "allow");
+    fireEvent.click(screen.getByText("暂不添加"));
+    expect(onResolve).toHaveBeenCalledWith("i9", "deny");
+  });
+});

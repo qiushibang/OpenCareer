@@ -1,0 +1,116 @@
+# OpenCareer 本机维护入口：18080 仅绑定回环地址，禁止公网免登录访问。
+#
+# 本文件与正式域名编排共用宿主机 PostgreSQL、Redis、data-a 和后端监听地址。
+# 回滚不得启动另一套容器数据库，否则页面会像“数据丢失”一样显示空数据。
+
+name: opencareer-alpha
+
+x-cn-build-args: &cn-build-args
+  APT_MIRROR: ${APT_MIRROR:-mirrors.aliyun.com}
+  PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}
+  PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-mirrors.aliyun.com}
+  REQUIREMENTS: ${REQUIREMENTS:-deploy/requirements-server.cn.txt}
+
+services:
+  backend-a:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args: *cn-build-args
+    image: opencareer-backend:domain
+    restart: unless-stopped
+    init: true
+    network_mode: host
+    command:
+      - python
+      - -m
+      - coworker.server.run
+      - --cwd
+      - /data/workspace
+      - --host
+      - ${BACKEND_BIND_HOST:-172.18.0.1}
+      - --port
+      - ${BACKEND_PORT:-18768}
+    stop_grace_period: 20s
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request;urllib.request.urlopen('http://${BACKEND_BIND_HOST:-172.18.0.1}:${BACKEND_PORT:-18768}/v1/health').read()
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    environment:
+      OPENCAR_MODEL: ${OPENCAR_MODEL:-}
+      OPENCAR_RELEASE: ${OPENCAR_RELEASE:-unknown}
+      OPENCAR_SUPPORT_ADMIN_IDS: ${OPENCAR_SUPPORT_ADMIN_IDS:-}
+      DATABASE_URL: ${DATABASE_URL:?请复用当前生产 PostgreSQL 连接串}
+      REDIS_URL: ${REDIS_URL:-redis://127.0.0.1:6379/0}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      MOONSHOT_API_KEY: ${MOONSHOT_API_KEY:-}
+      OPENCAR_SEED_DEMO: ${OPENCAR_SEED_DEMO:-1}
+      COWORKER_API_TOKEN: ${TOKEN_A:?请先设置保留 IP 入口的 Token}
+      OPENCAR_EXTRA_ORIGINS: http://${SERVER_IP:?请先设置 SERVER_IP}:${IP_PORT:-18080}
+    volumes:
+      - data-a:/data
+    mem_limit: 1200m
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${IP_PORT:-18080}:${IP_PORT:-18080}"
+    environment:
+      IP_PORT: ${IP_PORT:-18080}
+      TOKEN_A: ${TOKEN_A:?请先设置保留 IP 入口的 Token}
+      BACKEND_UPSTREAM: ${BACKEND_BIND_HOST:-172.18.0.1}:${BACKEND_PORT:-18768}
+    volumes:
+      - ./Caddyfile.ip:/etc/caddy/Caddyfile:ro
+      - ./web:/srv/web:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      backend-a:
+        condition: service_healthy
+
+  crawler:
+    profiles: ["crawl"]
+    build:
+      context: ..
+      dockerfile: deploy/crawler/Dockerfile
+      args:
+        <<: *cn-build-args
+        PLAYWRIGHT_DOWNLOAD_HOST: ${PLAYWRIGHT_DOWNLOAD_HOST:-https://cdn.npmmirror.com/binaries/playwright}
+    image: opencareer-crawler:domain
+    restart: unless-stopped
+    init: true
+    network_mode: host
+    shm_size: "512mb"
+    mem_limit: 700m
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      DATABASE_URL: ${DATABASE_URL:?请复用当前生产 PostgreSQL 连接串}
+      REDIS_URL: ${REDIS_URL:-redis://127.0.0.1:6379/0}
+      CRAWL_AT: ${CRAWL_AT:-04:00}
+      CRAWL_JITTER_MINUTES: ${CRAWL_JITTER_MINUTES:-25}
+      CRAWL_RUN_ON_START: ${CRAWL_RUN_ON_START:-0}
+      CRAWL_ONLY: ${CRAWL_ONLY:-}
+      CRAWL_SKIP: ${CRAWL_SKIP:-}
+      CRAWL_SOURCE_TIMEOUT: ${CRAWL_SOURCE_TIMEOUT:-300}
+      CRAWL_PAUSE_SECONDS: ${CRAWL_PAUSE_SECONDS:-3}
+    volumes:
+      - crawler-cache:/cache
+    depends_on:
+      backend-a:
+        condition: service_healthy
+
+volumes:
+  caddy-data:
+  caddy-config:
+  crawler-cache:
+  data-a:

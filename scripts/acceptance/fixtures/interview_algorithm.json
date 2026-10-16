@@ -1,0 +1,37 @@
+{
+  "job": {
+    "title": "大模型推理算法工程师",
+    "requirements": [
+      "熟悉大模型训练和推理优化",
+      "能够设计离线评测与误差分析",
+      "熟练使用 Python"
+    ]
+  },
+  "resume": {
+    "display_name": "算法验收简历",
+    "sections": {
+      "basic": {
+        "email": "algorithm-secret@example.com",
+        "phone": "13800001234"
+      },
+      "project": [
+        {
+          "name": "推理服务优化",
+          "highlights": [
+            "熟悉大模型训练和推理优化，使用 Python 实现批处理推理服务并优化显存",
+            "设计离线评测与误差分析，覆盖准确率、吞吐量和 P95 延迟"
+          ]
+        }
+      ]
+    }
+  },
+  "expected_tracks": [
+    "algorithm",
+    "engineering"
+  ],
+  "required_dimensions": [
+    "model_choice",
+    "evaluation",
+    "optimization"
+  ]
+}

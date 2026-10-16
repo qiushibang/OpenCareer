@@ -1,0 +1,24 @@
+# 构建上下文瘦身：只留镜像真正 COPY 的东西（否则会把 surfaces/gui/node_modules ~300MB 传给 docker）。
+# 文件名和 Dockerfile 绑定，BuildKit 会优先用它，不影响仓库里其他构建。
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/target
+**/dist
+**/dist-alpha
+**/*.log
+.git
+.github
+.venv
+deploy/web
+deploy/.env
+docs
+tests
+artifacts
+ui-mocks
+examples
+stt
+packaging
+surfaces/gui/e2e
+surfaces/gui/e2e-live
+surfaces/gui/src-tauri

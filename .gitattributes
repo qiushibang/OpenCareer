@@ -1,0 +1,3 @@
+# Historical private handoff artifact: retain in the maintenance repository,
+# never include in a clean public source export.
+opencareer-cloud-alpha.patch export-ignore

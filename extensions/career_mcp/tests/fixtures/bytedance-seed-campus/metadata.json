@@ -1,0 +1,14 @@
+{
+  "source_id": "bytedance-seed-campus",
+  "entry_url": "https://jobs.bytedance.com/campus/position",
+  "project_id": "7621018151002507573",
+  "project_name": "2027届Seed大模型人才校招",
+  "retrieved_at": "2026-08-05",
+  "original_total": 85,
+  "fixture_total": 2,
+  "reduced": true,
+  "expected_job_ids": [
+    "7622492806745753909",
+    "7622245198294436149"
+  ]
+}

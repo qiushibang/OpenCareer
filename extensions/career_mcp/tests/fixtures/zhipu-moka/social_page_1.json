@@ -1,0 +1,14 @@
+{
+  "page": 1,
+  "page_count": 1,
+  "page_size": 30,
+  "jobs": [
+    {
+      "href": "#/job/ddf2a8a2-4d14-42aa-ac43-848be23c7cd2",
+      "title": "大模型数据专家",
+      "published_at": "发布于 2026-08-01",
+      "metadata": ["张笑涵全职员工组", "全职"],
+      "description": "岗位职责\n负责大模型数据体系建设。\n\n岗位要求\n具备大模型数据处理和工程经验。"
+    }
+  ]
+}

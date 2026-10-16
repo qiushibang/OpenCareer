@@ -1,0 +1,35 @@
+{
+  "statusCode": 200,
+  "alertMsg": "成功",
+  "data": {
+    "pageNum": 1,
+    "pageSize": 10,
+    "total": 2,
+    "totalPage": 1,
+    "list": [
+      {
+        "positionId": 21594,
+        "positionName": "电影内容运营",
+        "workplace": "上海市，北京市",
+        "publishTime": "2026-08-06",
+        "recruitStatus": "in_recruitment",
+        "duty": "负责电影兴趣圈层内容运营、档期活动和跨团队项目落地。",
+        "qualification": "本科及以上学历，具备互联网内容或社区运营经验。",
+        "jobType": "内容运营"
+      },
+      {
+        "positionId": 20380,
+        "positionName": "游戏主播运营-北/上/深",
+        "workplace": "上海市，深圳市",
+        "publishTime": "2026-08-06",
+        "recruitStatus": "in_recruitment",
+        "duty": "负责游戏主播挖掘、孵化和培养，推动产品与研发协作。",
+        "qualification": "具备游戏直播运营经验，理解直播行业并热爱游戏。",
+        "jobType": "内容运营"
+      }
+    ]
+  },
+  "errorCode": 0,
+  "errorMsg": null,
+  "success": true
+}

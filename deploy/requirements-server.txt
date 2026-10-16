@@ -1,0 +1,27 @@
+# 云端 alpha 后端的「精简运行时依赖」——刻意不等于 pyproject.toml 的核心依赖。
+#
+# 为什么单独一份：镜像里用 `pip install --no-deps -e .`（见 Dockerfile），只为了让
+# `coworker` / `extensions` 两个包可导入，依赖由这份清单钉住。这样
+#   1) 不会拖进 OCR/CV 那 ~300MB 原生 wheel（rapidocr/onnxruntime/opencv-python/numpy 已挪进 [ocr] extra）；
+#   2) 也不会拖进桌面端才用得到的 anthropic / google-genai / google-auth / textual。
+# 这个组合是实测能起服务的最小集合。要加别的模型供应商，把对应 SDK 加在这里再重建镜像。
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2
+httpx>=0.27
+pyyaml>=6
+openai>=1.0
+mcp>=1.1,<2
+croniter>=2
+pypdf>=5
+pypdfium2>=4
+python-docx>=1.1,<2
+docstring_parser
+websockets>=13
+ddgs>=9
+psycopg[binary,pool]>=3.2,<4
+redis>=5,<6
+Authlib>=1.7,<2
+itsdangerous>=2.2,<3
+# aisuite 只有 git 版（pyproject.toml 里钉的同一个 commit）——所以镜像里必须装 git。
+aisuite @ git+https://github.com/andrewyng/aisuite.git@1b4bbf303ec21968230b1ec869a144d054e9b3c4

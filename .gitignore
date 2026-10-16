@@ -1,0 +1,37 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.coverage
+.local-state/
+career/
+
+# Local secrets (live-smoke BYO keys) — never committed
+.env
+
+# Tailored resumes contain private contact information.
+artifacts/tailored-resumes/
+
+# Runtime outputs may contain resumes, interview transcripts, or test data.
+artifacts/
+
+# Local development-tool state.
+# 注意写法：必须是 .trae/* 而不是 .trae/ —— 目录整体被忽略时 git 不会进去看，
+# 后面的 ! 例外规则就永远不生效（.trae/rules 会被静默丢掉）。
+.trae/*
+# 例外：给 Trae 看的项目规则要进版本库（换机器/多人协作都能用），其余本地状态照旧忽略。
+!.trae/rules/
+.superpowers/
+
+# Private developer state and promotional screenshots are not source code.
+.zcode/
+output/
+.venv-local/
+.env.*
+!.env.example
+*.token
+*.pem
+*.key

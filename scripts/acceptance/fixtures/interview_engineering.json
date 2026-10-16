@@ -1,0 +1,36 @@
+{
+  "job": {
+    "title": "Agent 平台后端研发工程师",
+    "requirements": [
+      "负责 Agent 工具调用平台架构设计",
+      "熟悉并发控制、事务和故障恢复",
+      "具备 Python 后端开发经验"
+    ]
+  },
+  "resume": {
+    "display_name": "研发验收简历",
+    "sections": {
+      "basic": {
+        "email": "engineering-secret@example.com",
+        "phone": "13900001234"
+      },
+      "project": [
+        {
+          "name": "OpenCareer",
+          "highlights": [
+            "负责 Agent 工具调用平台架构设计，并设计基于 CAS 的会话并发控制",
+            "实现并发控制、事务和故障恢复，覆盖 SQLite 故障回滚测试"
+          ]
+        }
+      ]
+    }
+  },
+  "expected_tracks": [
+    "engineering"
+  ],
+  "required_dimensions": [
+    "implementation",
+    "concurrency",
+    "reliability"
+  ]
+}

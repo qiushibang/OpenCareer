@@ -1,0 +1,35 @@
+{
+  "code": 0,
+  "message": "ok",
+  "result": {
+    "total": 2,
+    "list": [
+      {
+        "id": 31947,
+        "name": "AI应用开发工程师-【综效线-企业应用部】",
+        "recruitProjectCode": "socialr",
+        "positionNatureCode": "C001",
+        "positionCategoryCode": "J0012",
+        "workExperienceCode": "4",
+        "description": "参与软件需求分析和系统设计，开发和维护高质量应用程序。",
+        "positionDemand": "本科及以上学历，计算机基础扎实，有编码与设计工作经验。",
+        "updateTime": "2026-08-05T19:34:50.000+08:00",
+        "workLocationsCode": ["Beijing"],
+        "channelCode": "official"
+      },
+      {
+        "id": 29268,
+        "name": "大模型推理工程师（LLM Inference）",
+        "recruitProjectCode": "socialr",
+        "positionNatureCode": "C001",
+        "positionCategoryCode": "J0012",
+        "workExperienceCode": "5",
+        "description": "负责大模型推理引擎研发与优化，提升吞吐并降低时延。",
+        "positionDemand": "本科及以上学历，熟悉 Transformer 推理和主流推理框架。",
+        "updateTime": "2026-08-05T19:33:57.000+08:00",
+        "workLocationsCode": ["Beijing", "Shanghai", "Shenzhen", "Hangzhou"],
+        "channelCode": "official"
+      }
+    ]
+  }
+}

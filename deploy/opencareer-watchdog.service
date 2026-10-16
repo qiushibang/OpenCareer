@@ -1,0 +1,24 @@
+[Unit]
+Description=OpenCareer content-free host health check
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=opencareer-monitor
+Group=opencareer-monitor
+WorkingDirectory=/opt/opencareer-monitor
+EnvironmentFile=/etc/opencareer-watchdog.env
+ExecStart=/opt/opencareer-monitor/.venv/bin/python -m extensions.support.watchdog --state-file /var/lib/opencareer-watchdog/state.json
+StateDirectory=opencareer-watchdog
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/opencareer-watchdog
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+TimeoutStartSec=30
+MemoryMax=192M
+CPUQuota=20%

@@ -1,0 +1,54 @@
+# Caddyfile.ip —— 「还没有域名 / 还在备案」阶段的自测入口。
+#
+# 和 Caddyfile（域名 + 自动 HTTPS + Authing 版）的关系：
+#   Caddyfile      正式使用：app.opencareer.online，自动证书，443
+#   Caddyfile.ip   你自己自测用：http://<公网IP>:{$IP_PORT}，纯 HTTP，无证书
+#
+# 为什么要分两份：
+#   1) 中国内地服务器上，**域名**必须先 ICP 备案才能正常提供 Web 访问，未备案会被拦截；
+#      而直接用公网 IP 自测不涉及域名，可以立刻跑起来。
+#   2) 没有域名就签不了公网证书（Let's Encrypt 不给 IP 发证），所以这一份显式关掉自动 HTTPS，
+#      否则 Caddy 启动时会反复尝试申请证书并刷错误日志。
+#
+# ⚠️ 安全前提（务必照做）：这个入口**没有任何登录**，谁访问到就是谁在用你的账号和你的模型额度。
+#    所以：a) 端口用非标端口（默认 18080），b) 只在自测时去轻量控制台防火墙放行这个端口，
+#    自测完就把那条防火墙规则删掉。备案通过后切回 Caddyfile（HTTPS + 子域名）再邀请朋友。
+#    另外这是明文 HTTP：自测阶段别上传真实简历，用一份脱敏的假简历。
+#
+# 下面两个 snippet 和 Caddyfile 里的是同一份，改动时请两边同步（故意复制而不是 import 外部文件：
+# 少一个挂载点就少一个「文件没挂上导致 Caddy 起不来」的故障模式）。
+{
+	# 没有域名，关掉自动 HTTPS：不申请证书、不做 http→https 跳转。
+	auto_https off
+	# 管理端口不对外，避免 2019 端口被容器网络里的东西碰到。
+	# 代价：`caddy reload` / `caddy stop` 这类走管理 API 的命令在容器里用不了——
+	# 改完这个文件就重启容器：docker compose -f docker-compose.ip.yml restart caddy
+	admin off
+}
+
+(spa) {
+	root * /srv/web
+	try_files {path} /index.html
+	file_server
+	encode zstd gzip
+}
+
+(backend) {
+	handle /_openworker/* {
+		uri strip_prefix /_openworker
+		reverse_proxy {args[0]} {
+			header_up X-OpenWorker-Token {args[1]}
+			header_up Sec-WebSocket-Protocol "openworker, {args[1]}"
+		}
+	}
+	handle {
+		import spa
+	}
+}
+
+# {$IP_PORT} 来自 .env（默认 18080）。站点地址写成 :端口 表示「任何 Host 都接」——
+# 用 IP 访问时浏览器发过来的 Host 就是 IP，写死域名会 404。
+:{$IP_PORT} {
+	import backend {$BACKEND_UPSTREAM} {$TOKEN_A}
+	log
+}

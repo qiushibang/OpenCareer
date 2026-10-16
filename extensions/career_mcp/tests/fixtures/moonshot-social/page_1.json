@@ -1,0 +1,28 @@
+{
+  "page": 1,
+  "page_count": 1,
+  "page_size": 30,
+  "jobs": [
+    {
+      "href": "#/job/33f1df2b-19b3-4f60-ac30-6c64c75f42ed",
+      "title": "KIMI产品设计师",
+      "published_at": "发布于 2026-07-29",
+      "metadata": [
+        "全职",
+        "设计类",
+        "上海市 北京市"
+      ],
+      "description": "【你将负责什么】\n定义新一代 AI Agent 的产品形态，参与 Kimi 产品研发。\n\n【我们希望你】\n具备交互设计背景、AI 项目经验和独立推进能力。"
+    },
+    {
+      "href": "#/job/7fdcddca-2953-4216-b0ae-ab81c0ee6daa",
+      "title": "海外PR负责人",
+      "published_at": "发布于 2026-07-23",
+      "metadata": [
+        "全职",
+        "市场类"
+      ],
+      "description": "岗位定位\n负责 Kimi 的境外市场新闻公关工作。\n\n核心职责\n维护新闻机构关系，制定全球传播策略并推动开源生态传播。\n\n任职要求\n具备国际科技公司公关经验和跨文化沟通能力。"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+[Unit]
+Description=Check OpenCareer host every minute
+
+[Timer]
+OnBootSec=60s
+OnUnitInactiveSec=60s
+AccuracySec=5s
+Unit=opencareer-watchdog.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,47 @@
+{
+  "code": 0,
+  "message": "成功",
+  "data": {
+    "list": [
+      {
+        "id": 3430,
+        "title": "项目申报&政策支持岗（实习生）",
+        "cityZhNames": [
+          "北京"
+        ],
+        "levelOneDeptName": "公共事务部",
+        "description": "1、 及时监测、搜集国家、北京产业政策，并根据相关性进行整理分析；\n2、 负责项目申报前期报告汇总、附件材料收集及最终材料的整合及递交等；\n3、 支撑主管做好项目申报内部各部门协调和推进工作；\n4、 负责与产业主管部门基本的对接和交流工作；\n5、具备较强的政策同查和公文撰写功底。",
+        "requirement": "1、硕士学历，计算机、项目管理、公共关系管理等专业优先考虑；\n2、熟练掌握日常电脑应用的各种办公软件，具有良好的文字组织和写作专长；\n3、性格外向，有责任心及团队合作精神，具有较强的沟通表达能力；\n4、有相关实习经验者优先；\n注：26届应届生，有转正机会",
+        "expectedJobLevel": null,
+        "publishTime": "2026-03-27",
+        "larkJobCode": "A168021",
+        "type": 3,
+        "url": "https://xiaomi.jobs.f.mioffice.cn/internship/position/7621150010131400998/detail",
+        "jobId": "7621150010131237158",
+        "jobPostId": "7621150010131400998"
+      },
+      {
+        "id": 3433,
+        "title": "Android 内存问题分析与工具开发实习生",
+        "cityZhNames": [
+          "上海"
+        ],
+        "levelOneDeptName": "手机部",
+        "description": "1、参与 Android 内存问题（OOM、内存泄漏、碎片化、RSS 异常增长等）的分析方法研究与工具建设；\n2、开发或完善 heap dump 解析、smaps 分析、LMKD 行为追踪等工具模块；\n3、结合 AI 能力构建内存问题智能诊断流程：自动提取关键指标、生成问题报告、给出优化建议；\n4、配合测试同学在真实设备上复现和定位内存问题，积累典型 Case 库；",
+        "requirement": "1、理解 Linux / Android 内存管理基础（虚拟内存、匿名映射、Zram、ION 等）；\n2、有 Python 或 Java / Kotlin 开发经验；熟悉 Android Studio Memory Profiler、MAT 等工具者优先；\n3、对LLM/AI Agent 应用有了解或实践经验者加分。",
+        "expectedJobLevel": null,
+        "publishTime": "2026-03-27",
+        "larkJobCode": "A182572",
+        "type": 3,
+        "url": "https://xiaomi.jobs.f.mioffice.cn/internship/position/7621736061081667881/detail",
+        "jobId": "7621736061081504041",
+        "jobPostId": "7621736061081667881"
+      }
+    ],
+    "pageSize": 10,
+    "pageNum": 1,
+    "pageTotal": 253,
+    "total": 2522
+  },
+  "traceId": null
+}

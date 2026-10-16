@@ -1,0 +1,37 @@
+{
+  "job": {
+    "title": "AI 产品经理",
+    "requirements": [
+      "负责 AI Agent 产品策略和功能设计",
+      "建立产品评测体系和成功指标",
+      "基于用户反馈推动产品迭代"
+    ]
+  },
+  "resume": {
+    "display_name": "产品验收简历",
+    "sections": {
+      "basic": {
+        "email": "product-secret@example.com",
+        "phone": "13700001234"
+      },
+      "project": [
+        {
+          "name": "求职 Agent",
+          "highlights": [
+            "负责 AI Agent 产品策略和功能设计，定义岗位发现、匹配和模拟面试流程",
+            "建立产品评测体系和成功指标，使用任务成功率与事实错误率评测功能"
+          ]
+        }
+      ]
+    }
+  },
+  "expected_tracks": [
+    "product"
+  ],
+  "required_dimensions": [
+    "strategy",
+    "feature_design",
+    "evaluation",
+    "metrics"
+  ]
+}

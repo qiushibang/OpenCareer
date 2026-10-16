@@ -1,0 +1,47 @@
+{
+  "status": 1,
+  "message": "成功",
+  "data": {
+    "list": [
+      {
+        "jobUnionId": "4612117869",
+        "name": "美团打车政府事务",
+        "jobType": "3",
+        "jobStatus": "000",
+        "jobFamily": "职能类",
+        "jobFamilyGroup": "公司事务",
+        "cityList": [{"name": "南京市"}],
+        "department": [{"name": "核心本地商业-美团平台"}],
+        "departmentIntro": null,
+        "jobDuty": "负责美团打车华南区域政府事务及网约车城市业务。",
+        "jobRequirement": "三年以上工作经验，熟悉交通运输行业政策法规。",
+        "precedence": null,
+        "highLight": "可接触多元业务场景。",
+        "refreshTime": 1785942127000
+      },
+      {
+        "jobUnionId": "4672329717",
+        "name": "AI搜索优化（GEO）",
+        "jobType": "3",
+        "jobStatus": "000",
+        "jobFamily": "市场营销类",
+        "jobFamilyGroup": "营销",
+        "cityList": [{"name": "北京市"}],
+        "department": [{"name": "核心本地商业-美团平台"}],
+        "departmentIntro": null,
+        "jobDuty": "负责公司 AI 搜索优化策略制定与落地执行。",
+        "jobRequirement": "本科及以上学历，具备 AI 搜索优化相关经验。",
+        "precedence": null,
+        "highLight": "参与前沿 AI 技术在搜索优化领域的实际应用。",
+        "refreshTime": 1785942050000
+      }
+    ],
+    "page": {
+      "pageNo": 1,
+      "pageSize": 100,
+      "totalPage": 1,
+      "totalCount": 2
+    },
+    "traceId": "fixture"
+  }
+}

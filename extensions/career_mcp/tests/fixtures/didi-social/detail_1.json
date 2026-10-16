@@ -1,0 +1,18 @@
+{
+  "meta": {"api": "", "method": "get", "code": 0, "message": "数据获取成功"},
+  "data": {
+    "jobName": "云端AI Coding全栈工程师",
+    "deptName": "AI Dev",
+    "publishTime": "2026-08-05 20:21:36",
+    "recruitType": "1",
+    "refreshTime": "2026-08-05 20:21:36",
+    "jdNo": "JR20260804017",
+    "jobDesc": "实现云端通用执行与 Handover 能力，建设 Coding Agent 平台。",
+    "qualification": "具备扎实的全栈研发能力，理解 AI Coding 与 Agent 工作流。",
+    "recordId": 371806,
+    "jdStatus": 2,
+    "workArea": "北京市",
+    "recruitNum": 2,
+    "jobType": "技术"
+  }
+}

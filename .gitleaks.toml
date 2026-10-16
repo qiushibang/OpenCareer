@@ -1,0 +1,9 @@
+title = "OpenCareer public-source secret scan"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Two literal fake credentials in inherited offline provider tests; no real services accept these values"
+regexTarget = "secret"
+regexes = ['^ABSKlive$', '^amp_key_abc123$']

@@ -1,0 +1,18 @@
+{
+  "source_id": "deepseek-careers",
+  "entry_url": "https://talent.deepseek.com/",
+  "bundle_url": "https://talent.deepseek.com/static/main.264ac482b7.js",
+  "retrieved_at": "2026-08-05",
+  "entry_content_type": "text/html",
+  "bundle_content_type": "text/javascript",
+  "authentication": "none",
+  "original_entry_bytes": 530,
+  "original_bundle_bytes": 360047,
+  "original_total": 32,
+  "reduced": true,
+  "fixture_total": 2,
+  "expected_job_ids": [
+    "647a8853-3707-4cb6-a4cd-7e582da27774",
+    "a7a0d39e-a15b-4dac-909c-0ce26fbb950e"
+  ]
+}

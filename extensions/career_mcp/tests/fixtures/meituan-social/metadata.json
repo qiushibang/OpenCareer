@@ -1,0 +1,12 @@
+{
+  "source_id": "meituan-social-cn",
+  "company_slug": "meituan",
+  "official_entry_url": "https://hr.meituan.com/web/social",
+  "listing_api": "https://hr.meituan.com/api/official/job/getJobList",
+  "overseas_city_api": "https://hr.meituan.com/api/official/en/city/search",
+  "retrieved_at": "2026-08-06",
+  "original_total": 2264,
+  "fixture_total": 2,
+  "reduced": true,
+  "expected_job_ids": ["4612117869", "4672329717"]
+}

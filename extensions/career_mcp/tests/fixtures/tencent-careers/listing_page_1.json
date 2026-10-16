@@ -1,0 +1,38 @@
+{
+  "Code": 200,
+  "Data": {
+    "Count": 2,
+    "Posts": [
+      {
+        "PostId": "2041515867862368256",
+        "RecruitPostId": 119112,
+        "RecruitPostName": "腾讯营销-资深行业策略产品-线索方向",
+        "CountryName": "中国",
+        "LocationName": "北京",
+        "BGName": "CDG",
+        "ProductName": "腾讯广告",
+        "CategoryName": "产品",
+        "Responsibility": "负责腾讯竞价投放线索场景的需求洞察、策略制定、数据分析与上线推进。",
+        "LastUpdateTime": "2026年08月05日",
+        "PostURL": "http://careers.tencent.com/jobdesc.html?postId=2041515867862368256",
+        "IsValid": true,
+        "RequireWorkYearsName": "三年以上工作经验"
+      },
+      {
+        "PostId": "2084148412080635904",
+        "RecruitPostId": 121612,
+        "RecruitPostName": "腾讯战略发展部-高级经济学家",
+        "CountryName": "中国",
+        "LocationName": "中国香港",
+        "BGName": "CDG",
+        "ProductName": "公共",
+        "CategoryName": "战略与投资",
+        "Responsibility": "与公司相关业务部门合作，开展应用经济学研究并撰写研究报告。",
+        "LastUpdateTime": "2026年08月05日",
+        "PostURL": "http://careers.tencent.com/jobdesc.html?postId=2084148412080635904",
+        "IsValid": true,
+        "RequireWorkYearsName": "五年以上工作经验"
+      }
+    ]
+  }
+}

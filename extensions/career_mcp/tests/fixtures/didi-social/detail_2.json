@@ -1,0 +1,18 @@
+{
+  "meta": {"api": "", "method": "get", "code": 0, "message": "数据获取成功"},
+  "data": {
+    "jobName": "PMO",
+    "deptName": "PMO",
+    "publishTime": "2026-08-05 18:25:49",
+    "recruitType": "1",
+    "refreshTime": "2026-08-05 18:25:49",
+    "jdNo": "JR2026080400R",
+    "jobDesc": "负责公司战略级项目及技术重大项目交付，持续建设项目管理体系。",
+    "qualification": "本科及以上学历，具备技术类项目管理经验和跨团队协作能力。",
+    "recordId": 371788,
+    "jdStatus": 2,
+    "workArea": "北京市",
+    "recruitNum": 1,
+    "jobType": "技术"
+  }
+}

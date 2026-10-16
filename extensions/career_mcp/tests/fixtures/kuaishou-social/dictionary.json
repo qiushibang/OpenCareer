@@ -1,0 +1,19 @@
+{
+  "code": 0,
+  "message": "ok",
+  "result": {
+    "workLocation": [
+      {"code": "Beijing", "name": "北京", "parentCode": "domestic"},
+      {"code": "Shanghai", "name": "上海", "parentCode": "domestic"},
+      {"code": "Shenzhen", "name": "深圳", "parentCode": "domestic"},
+      {"code": "Hangzhou", "name": "杭州", "parentCode": "domestic"}
+    ],
+    "positionCategory": [
+      {"code": "J0012", "name": "工程类"}
+    ],
+    "positionExperience": [
+      {"code": "4", "name": "1-3年"},
+      {"code": "5", "name": "3-5年"}
+    ]
+  }
+}

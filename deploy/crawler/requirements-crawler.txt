@@ -1,0 +1,9 @@
+# 抓取容器专属依赖：在 requirements-server.txt 之上只多一个 playwright。
+#
+# 为什么单独一份：11 个数据源里有 6 个必须靠浏览器渲染（阿里、字节 ×2、快手、月之暗面、
+# 小红书、智谱），其余走公开 JSON API。playwright 加上 chromium 会让镜像从 ~350MB 涨到
+# 1GB 以上，每个浏览器实例还要吃几百 MB 内存——所以只有这一个抓取容器装它，
+# 朋友们的后端容器继续用精简镜像。
+#
+# 版本跟 pyproject.toml 的 [browser] extra 保持一致，避免桌面端和服务器端行为漂移。
+playwright>=1.44

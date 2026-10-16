@@ -1,0 +1,41 @@
+# OpenCareer 单域名入口：所有用户必须通过 Authing 会话。
+
+(spa) {
+	root * /srv/web
+	try_files {path} /index.html
+	file_server
+	encode zstd gzip
+}
+
+# 正式域名绝不能注入共享 Token。浏览器只凭 HttpOnly 会话 Cookie 鉴权。
+(domain_backend) {
+	handle /_openworker/* {
+		request_body {
+			max_size 16MB
+		}
+		uri strip_prefix /_openworker
+		reverse_proxy {args[0]} {
+			# 域名请求即使自行伪造旧 Header，也不能退回共享 Alpha Token。
+			header_up -X-OpenWorker-Token
+			header_up Sec-WebSocket-Protocol "openworker"
+		}
+	}
+	handle {
+		import spa
+	}
+}
+
+app.{$BASE_DOMAIN} {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+	import domain_backend {$BACKEND_UPSTREAM}
+}
+
+# 用户输入根域名或 www 时统一进入正式 app 子域名。
+{$BASE_DOMAIN}, www.{$BASE_DOMAIN} {
+	redir https://app.{$BASE_DOMAIN}{uri} permanent
+}

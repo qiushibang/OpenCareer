@@ -1,0 +1,45 @@
+{
+  "success": true,
+  "errorMsg": null,
+  "errorCode": null,
+  "content": {
+    "datas": [
+      {
+        "id": 100030500001,
+        "name": "Token Foundry-基础大模型预训练数据算法-Qwen",
+        "categories": [
+          "技术类-算法"
+        ],
+        "publishTime": 1785936822000,
+        "modifyTime": 1785936822000,
+        "workLocations": [
+          "北京",
+          "杭州"
+        ],
+        "department": "Token Foundry",
+        "description": "负责 Qwen 大模型预训练数据的算法设计与体系建设，建设高质量、可持续迭代的预训练数据管线。",
+        "requirement": "具备大语言模型相关理论和实践经验，具备优秀的研究、工程和协作能力。"
+      },
+      {
+        "id": 100030500002,
+        "name": "Token Foundry-大模型训练Infra工程师",
+        "categories": [
+          "技术类-开发"
+        ],
+        "publishTime": 1785936822000,
+        "modifyTime": 1785936822000,
+        "workLocations": [
+          "北京",
+          "深圳",
+          "杭州"
+        ],
+        "department": "Token Foundry",
+        "description": "负责大模型训练基础设施和稳定性系统建设。",
+        "requirement": "具备分布式系统开发经验，熟悉大规模模型训练链路。"
+      }
+    ],
+    "totalCount": 2,
+    "pageSize": 500,
+    "currentPage": 1
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "meta": {"api": "RecruitFrontController", "method": "GET", "code": 0, "message": ""},
+  "data": {
+    "total": 2,
+    "items": [
+      {"jdId": 65596, "jdNo": "JR20260804017", "workArea": "北京市", "deptName": "AI Dev", "jobType": 1, "jobName": "云端AI Coding全栈工程师 (JR20260804017)", "refreshTime": "2026-08-05 20:21:36"},
+      {"jdId": 65580, "jdNo": "JR2026080400R", "workArea": "北京市", "deptName": "PMO", "jobType": 1, "jobName": "PMO (JR2026080400R)", "refreshTime": "2026-08-05 18:25:49"}
+    ],
+    "page": 1,
+    "size": 16
+  }
+}

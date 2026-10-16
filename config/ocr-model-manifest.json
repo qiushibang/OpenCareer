@@ -1,0 +1,37 @@
+{
+  "engine": {
+    "name": "rapidocr-onnxruntime",
+    "version": "3.9.2"
+  },
+  "models": [
+    {
+      "bytes": 9929594,
+      "id": "PP-OCRv6_det_small",
+      "license": "Apache-2.0",
+      "package_relative_path": "models/PP-OCRv6_det_small.onnx",
+      "role": "det",
+      "sha256": "090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f"
+    },
+    {
+      "bytes": 585532,
+      "id": "ch_ppocr_mobile_v2.0_cls_mobile",
+      "license": "Apache-2.0",
+      "package_relative_path": "models/ch_ppocr_mobile_v2.0_cls_mobile.onnx",
+      "role": "cls",
+      "sha256": "e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185a89d6215c"
+    },
+    {
+      "bytes": 21234383,
+      "id": "PP-OCRv6_rec_small",
+      "license": "Apache-2.0",
+      "package_relative_path": "models/PP-OCRv6_rec_small.onnx",
+      "role": "rec",
+      "sha256": "6f327246b50388f3c176ae304bd95767ea6dc0c9ae92153ef8cbe210b3c14884"
+    }
+  ],
+  "runtime": {
+    "name": "onnxruntime",
+    "version": "1.19.2"
+  },
+  "schema_version": 1
+}

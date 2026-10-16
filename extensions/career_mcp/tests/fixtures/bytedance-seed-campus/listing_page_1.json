@@ -1,0 +1,34 @@
+{
+  "code": 0,
+  "data": {
+    "job_post_list": [
+      {
+        "id": "7622492806745753909",
+        "title": "Dola算法工程师-Seed大模型人才校招",
+        "description": "Seed 大模型人才校招，是字节跳动 Seed 面向高校人才推出的招聘项目。\n\n工作内容：\n1、设计并优化 SFT 与 RLHF 流程；\n2、研究 RAG 与长文本处理技术。",
+        "requirement": "1、2027届获得本科及以上学历；\n2、具备扎实的算法与工程能力。",
+        "code": "A90938A",
+        "city_list": [{"name": "北京"}],
+        "recruit_type": {"name": "正式"},
+        "job_subject": {
+          "id": "7621018151002507573",
+          "name": {"zh_cn": "2027届Seed大模型人才校招"}
+        }
+      },
+      {
+        "id": "7622245198294436149",
+        "title": "视觉多模态大模型应用算法工程师-Seed大模型人才校招",
+        "description": "负责多模态大模型研发和应用，探索视觉 Agent 等能力。",
+        "requirement": "熟悉计算机视觉、机器学习与大模型训练。",
+        "code": "A159545",
+        "city_list": [{"name": "深圳"}],
+        "recruit_type": {"name": "正式"},
+        "job_subject": {
+          "id": "7621018151002507573",
+          "name": {"zh_cn": "2027届Seed大模型人才校招"}
+        }
+      }
+    ],
+    "count": 2
+  }
+}
