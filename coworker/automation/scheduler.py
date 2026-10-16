@@ -75,6 +75,11 @@ class Scheduler:
 
     async def _tick(self, *, trigger: str) -> None:
         for task in self.store.due():
+            # Do not enqueue a stale due snapshot while its run is suspended.
+            # It may finish before the new coroutine starts, releasing run_task's
+            # guard and otherwise causing an immediate duplicate execution.
+            if task.id in self._running_ids:
+                continue
             # Spawn, don't await: a run can suspend on a parked approval (standing
             # scoped approvals, §25) and one blocked automation must never stall the
             # scheduler loop, other due tasks, or self-wake resumption. Overlap is

@@ -367,7 +367,7 @@ describe("InterviewView", () => {
     const revoke = vi.fn();
     vi.stubGlobal(
       "Audio",
-      vi.fn(() => ({ play, pause, currentTime: 0 })),
+      vi.fn(function () { return { play, pause, currentTime: 0 }; }),
     );
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,

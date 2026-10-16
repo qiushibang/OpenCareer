@@ -1,6 +1,7 @@
 """Public command-line contract for the isolated local distribution."""
 from pathlib import Path
 import os
+import importlib
 import subprocess
 import sys
 import socket
@@ -30,12 +31,23 @@ def test_local_model_clients_ignore_inherited_provider_endpoints(tmp_path, monke
         secrets.put("provider:openai", {"api_key": "local-fixture-not-a-real-key"})
         captured = []
 
-        def reject_request(_client, request, **kwargs):
-            captured.append(str(request.url))
-            # Mock only the external HTTP boundary, before any real network call.
-            return httpx.Response(401, json={"error": {"message": "fixture", "type": "authentication_error"}}, request=request)
+        def block_network(*args, **kwargs):
+            raise AssertionError("Unexpected network access: transport must be intercepted")
 
-        isolated.setattr(httpx.Client, "send", reject_request)
+        isolated.setattr(socket, "getaddrinfo", block_network)
+        isolated.setattr(socket.socket, "connect", block_network)
+        # Newer provider SDKs use httpx2; support both without allowing a real request.
+        transports = [httpx]
+        try:
+            transports.append(importlib.import_module("httpx2"))
+        except ImportError:
+            pass
+        for transport in transports:
+            def reject_request(_client, request, response_type=transport.Response, **kwargs):
+                captured.append(str(request.url))
+                return response_type(401, json={"error": {"message": "fixture", "type": "authentication_error"}}, request=request)
+
+            isolated.setattr(transport.Client, "send", reject_request)
         for name, expected in (("openai", "https://api.openai.com/v1/responses"),
                                ("anthropic", "https://api.anthropic.com/v1/messages")):
             provider = build_provider_client(name, {"api_key": "local-fixture-not-a-real-key"}, secrets)
