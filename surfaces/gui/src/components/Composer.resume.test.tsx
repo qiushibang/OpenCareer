@@ -22,6 +22,27 @@ afterEach(() => {
 });
 
 describe("Composer resume import", () => {
+  it.each(["file", "text"])("asks for model setup before staging a %s resume", async (kind) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const p = props({ modelReady: false, onConnectModel: vi.fn() });
+    render(<Composer {...p} />);
+    const box = screen.getByRole("textbox");
+    fireEvent.change(box, { target: { value: "A fictional resume draft" } });
+    if (kind === "file") {
+      fireEvent.change(screen.getByTestId("resume-file-input"), {
+        target: { files: [new File(["fixture"], "resume.pdf", { type: "application/pdf" })] },
+      });
+    } else {
+      fireEvent.click(screen.getByRole("button", { name: "添加附件" }));
+      fireEvent.click(screen.getByText("导入已粘贴的简历"));
+    }
+    await waitFor(() => expect(p.onConnectModel).toHaveBeenCalledOnce());
+    expect(p.onSend).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect((box as HTMLTextAreaElement).value).toBe("A fictional resume draft");
+  });
+
   it("shows local reading state while the resume request is pending", async () => {
     let resolveRequest: ((value: unknown) => void) | undefined;
     vi.stubGlobal(

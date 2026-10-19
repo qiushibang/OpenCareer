@@ -6,6 +6,8 @@
 浏览器使用当前稳定版；样式最低要求 Chrome / Edge 111、Firefox 128 或 Safari 16.4。
 无需 Docker、PostgreSQL、Redis、Authing 或维护者的企业账号。
 首次安装需要访问 Python 包源、GitHub 和 npm。失败后可重新执行，不会删除数据。
+启动器支持通过 Python 管理器的符号链接入口创建环境；中断后会检测并补齐缺失的 pip。
+若创建失败，确认使用完整 Python 3.12，Linux 安装对应 venv/ensurepip 组件后重试。
 不要从陌生人获取所谓“共享模型密钥”。
 
 启动器使用 `.venv-local/`，不会替换开发者的 `.venv/`。
@@ -15,6 +17,9 @@
 使用 `http://127.0.0.1:1422`，在模型菜单配置自己的服务商和模型。第一版保持与
 托管 Career 模式相同的工具和服务商安全范围；尚不承诺任意自定义模型地址或 Ollama
 兼容性。初始岗位列表可能为空，可在对话中粘贴公开岗位描述并批准导入。
+新安装显示「未连接模型」，点击后在弹窗中配置自己的密钥；关闭弹窗不清空草稿。
+简历文件使用「＋ → 导入简历到求职档案（PDF/DOCX）」；文本先粘贴到输入框，
+再选择「＋ → 导入已粘贴的简历」。「PDF（仅用于对话）」不会建立求职档案。
 
 ## 数据生命周期
 
@@ -45,6 +50,8 @@
 python -m pytest tests -q
 python -m pytest extensions/career_mcp/tests -m 'not ocr_acceptance' -q
 OPENCAR_TEST_LOCAL_INSTALL=1 python -m pytest tests/test_local_installation.py -q
+# Fresh tracked-source copy, real dependency install and interrupted-setup retry (requires network)
+OPENCAR_TEST_LOCAL_BOOTSTRAP=1 python -m pytest tests/test_local_bootstrap.py -q
 # Optional browser-test tools (not runtime dependencies)
 python -m pip install playwright
 python -m playwright install chromium

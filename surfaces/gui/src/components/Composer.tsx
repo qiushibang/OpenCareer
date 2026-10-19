@@ -361,6 +361,10 @@ export function Composer(props: Props) {
 
   const stageResumeFile = async (file: File) => {
     setAttachMenuOpen(false);
+    if (props.modelReady === false) {
+      props.onConnectModel?.();
+      return;
+    }
     if (file.size > 10 * 1024 * 1024) {
       showAttachNotice(`${file.name} 已跳过：简历文件最大为 10 MB`);
       return;
@@ -420,6 +424,10 @@ export function Composer(props: Props) {
 
   const stagePastedResume = async () => {
     setAttachMenuOpen(false);
+    if (props.modelReady === false) {
+      props.onConnectModel?.();
+      return;
+    }
     const resumeText = text.trim();
     if (!resumeText) {
       showAttachNotice("请先将简历文本粘贴到输入框");

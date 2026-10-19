@@ -7,6 +7,21 @@ import {
 } from "./composerModelPolicy";
 
 describe("composerModelPolicy", () => {
+  it("does not treat a local default model name as a configured credential", () => {
+    expect(composerModelPolicy([], true, "deepseek:deepseek-v4-flash", []).modelReady).toBe(false);
+  });
+
+  it("requires the selected local provider, not an unrelated configured provider", () => {
+    expect(composerModelPolicy(["kimi:kimi-latest"], true, "deepseek:deepseek-v4-flash", ["kimi"]).modelReady).toBe(false);
+  });
+
+  it.each([
+    ["deepseek:custom-model", "deepseek"],
+    ["gpt-custom-model", "openai"],
+  ])("allows a custom local model from its configured provider: %s", (model, provider) => {
+    expect(composerModelPolicy([], true, model, [provider]).modelReady).toBe(true);
+  });
+
   it("only exposes Aiden when other configured models exist", () => {
     expect(
       composerModelPolicy([

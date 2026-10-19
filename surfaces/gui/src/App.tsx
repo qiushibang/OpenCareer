@@ -188,6 +188,7 @@ export function App() {
   const [agent, setAgent] = useState(DEFAULT_PERSONA_ID);
   const [model, setModel] = useState(AIDEN_MODEL);
   const [models, setModels] = useState<string[]>([]);
+  const [localProviders, setLocalProviders] = useState<string[]>([]);
   const [modelLabels, setModelLabels] = useState<Record<string, string>>({});
   // {full model id → context window in tokens} from the curated matrix (verified only);
   // drives the composer usage chip's context-fill meter.
@@ -608,7 +609,10 @@ export function App() {
     // provider（BYOK），默认模型来自 health —— set_default_model 后即时变化。
     if (isAlpha()) {
       getProviders()
-        .then((ps) => setModels(byokModelsFromProviders(ps)))
+        .then((ps) => {
+          setModels(byokModelsFromProviders(ps));
+          setLocalProviders(ps.filter((p) => p.configured).map((p) => p.name));
+        })
         .catch(() => {});
       getHealth()
         .then((h) => setModel(h.model))
@@ -627,7 +631,8 @@ export function App() {
   };
 
   // Open Settings → Configure Models (from the composer's "No model connected" chip).
-  const openModelSetup = () => openSettings("models");
+  const openModelSetup = () => import.meta.env.MODE === "standalone"
+    ? setQuickModelSetup(true) : openSettings("models");
 
   // Leaving the Settings page: pick up any model/surface changes for the composer (the modal used to
   // do this on close).
@@ -1014,7 +1019,9 @@ export function App() {
     return () => clearInterval(t);
   }, [surface, sessionId, browserRefreshKey, markUnattended]);
 
-  const composerModel = composerModelPolicy(models, isAlpha(), model);
+  const composerModel = composerModelPolicy(
+    models, isAlpha(), model, import.meta.env.MODE === "standalone" ? localProviders : undefined,
+  );
   const send = (
     text: string,
     attachments?: Attachment[],
@@ -1623,6 +1630,7 @@ export function App() {
       )}
       {quickModelSetup && (
         <QuickModelSetup
+          localMode={import.meta.env.MODE === "standalone"}
           onClose={() => setQuickModelSetup(false)}
           onOpenSettings={() => openSettings("models")}
           onSaved={loadSettings}

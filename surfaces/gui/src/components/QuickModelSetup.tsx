@@ -19,7 +19,9 @@ export function QuickModelSetup({
   onOpenSettings,
   onSaved,
   onUseModel,
+  localMode = false,
 }: {
+  localMode?: boolean;
   onClose: () => void;
   // 深链到设置 ▸ 模型（管理已配置的密钥与默认模型）。
   onOpenSettings: () => void;
@@ -71,7 +73,9 @@ export function QuickModelSetup({
           <div>
             <div className="text-[15px] font-semibold text-ink">配置自定义模型</div>
             <p className="text-[12px] text-muted mt-1 leading-relaxed">
-              选择模型服务商，填入你的 API Key。密钥保存在服务器上你的私人目录，仅本人可见；测试通过即保存并切换到新模型。
+              {localMode
+                ? "选择模型服务商，填入你的 API Key。密钥仅保存在本机。测试连接会访问所选服务商；测试通过即保存并切换到新模型。"
+                : "选择模型服务商，填入你的 API Key。密钥保存在服务器上你的私人目录，仅本人可见；测试通过即保存并切换到新模型。"}
             </p>
           </div>
           <button

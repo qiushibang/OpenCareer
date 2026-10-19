@@ -12,7 +12,6 @@ import socket
 import subprocess
 import sys
 import time
-import venv
 import webbrowser
 from pathlib import Path
 from urllib.request import build_opener, ProxyHandler
@@ -48,9 +47,24 @@ def install_dependencies(env: dict[str, str]) -> Path:
     python = ROOT / ".venv-local" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     marker = ROOT / ".venv-local" / ".opencareer-dependencies"
     fingerprint = hashlib.sha256((ROOT / "pyproject.toml").read_bytes()).hexdigest()
-    if not python.exists():
-        print("首次启动：创建独立 Python 环境…", flush=True)
-        venv.EnvBuilder(with_pip=True).create(ROOT / ".venv-local")
+    usable = python.exists() and subprocess.run(
+        [str(python), "-m", "pip", "--version"], env=env,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    ).returncode == 0
+    if not usable:
+        print("首次启动或上次安装未完成：准备独立 Python 环境…", flush=True)
+        # Resolve manager shims before writing pyvenv.cfg. Copying their executable
+        # with EnvBuilder's defaults can lose the standard library on macOS.
+        # Re-running venv also repairs an interrupted ensurepip without clearing data.
+        try:
+            subprocess.run([str(Path(sys.executable).resolve()), "-m", "venv",
+                            str(ROOT / ".venv-local")], env=env, check=True)
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(
+                "无法创建 Python 虚拟环境。请确认安装了完整的 Python 3.12；"
+                "Linux 还需要对应版本的 venv/ensurepip 组件。修复后重新运行本命令，数据不会删除。"
+            ) from exc
+        marker.unlink(missing_ok=True)
     if not marker.exists() or marker.read_text() != fingerprint:
         subprocess.run([str(python), "-m", "pip", "install", "-e", str(ROOT)], env=env, check=True)
         marker.write_text(fingerprint)

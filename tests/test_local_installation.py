@@ -42,7 +42,8 @@ def request(url: str, body: dict | None = None, headers: dict | None = None):
 
 
 @contextmanager
-def running(tmp_path: Path, port: int, backend_port: int):
+def running(tmp_path: Path, port: int, backend_port: int, *, root: Path = ROOT,
+            install: bool = False, python: str = sys.executable):
     log_path = tmp_path / "launcher.log"
     with log_path.open("w") as log:
         # Deliberately hostile inherited settings: launcher must isolate all of them.
@@ -50,12 +51,12 @@ def running(tmp_path: Path, port: int, backend_port: int):
                "REDIS_URL": "redis://invalid.invalid", "OPENCAR_AUTH_ISSUER": "https://invalid.invalid",
                "OPENCAR_USER_TOKENS": "wrong:inherited", "COWORKER_API_TOKEN": "inherited-do-not-use"}
         process = subprocess.Popen(
-            [sys.executable, str(ROOT / "start_local.py"), "--skip-install", "--no-browser",
+            [python, str(root / "start_local.py"), *([] if install else ["--skip-install"]), "--no-browser",
              "--port", str(port), "--backend-port", str(backend_port),
              "--data-dir", str(tmp_path / "data")], stdout=log, stderr=log, env=env,
         )
         try:
-            deadline = time.monotonic() + 120
+            deadline = time.monotonic() + (240 if install else 120)
             while time.monotonic() < deadline:
                 assert process.poll() is None, log_path.read_text()
                 try:

@@ -42,6 +42,8 @@ jobs:
           npm ci --prefix surfaces/gui
       - name: Local startup, isolation, origins and restart persistence
         run: OPENCAR_TEST_LOCAL_INSTALL=1 python -m pytest tests/test_local_launcher.py tests/test_local_installation.py -q
+      - name: Fresh source installation and interrupted setup recovery
+        run: OPENCAR_TEST_LOCAL_BOOTSTRAP=1 python -m pytest tests/test_local_bootstrap.py -q
 
   source-secrets:
     runs-on: ubuntu-latest

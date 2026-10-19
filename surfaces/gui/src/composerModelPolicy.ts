@@ -33,6 +33,7 @@ export function composerModelPolicy(
   configuredModels: string[],
   alpha = false,
   backendModel = "",
+  localProviders?: string[],
 ) {
   // 云端 Alpha：模型来自两端——health 的 backendModel（未配置 BYOK 时的服务器
   // 默认）和用户已配置 provider 推导的模型列表（BYOK）。绝不能回退到桌面专用
@@ -41,10 +42,14 @@ export function composerModelPolicy(
     const list = backendModel
       ? [backendModel, ...configuredModels.filter((m) => m !== backendModel)]
       : configuredModels;
+    const selected = backendModel || list[0] || "";
+    const provider = selected.includes(":") ? selected.split(":", 1)[0] : "openai";
     return {
-      model: backendModel || list[0] || "",
+      model: selected,
       models: list,
-      modelReady: Boolean(backendModel || list.length > 0),
+      // Standalone has no server-provided model credentials. A name from health
+      // is only a default, not evidence that this provider has been configured.
+      modelReady: Boolean(selected) && (localProviders === undefined || localProviders.includes(provider)),
     };
   }
   const modelReady = configuredModels.includes(AIDEN_MODEL);

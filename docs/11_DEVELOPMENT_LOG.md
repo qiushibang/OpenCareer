@@ -2811,3 +2811,34 @@
 - 限制：本次未重新执行全量 Python 后端/领域套件；业务 Python 未修改，已有本地
   端到端覆盖通过。真人模型/麦克风、原生 Windows 与旧系统桌面壳仍未验收。
   本次依赖零告警不是整个项目的绝对安全保证。远端同步需按用户选择另行核对。
+
+## 2026-10-19 — 按公开 README 复验新用户安装与首次使用
+
+- 用户授权发现问题后直接修复并同步公开仓库，禁止影响线上。以公开 `703f69f`
+  匿名克隆到独立临时目录；使用 Python 3.12.13、官方校验通过的隔离 Node.js
+  22.23.3、全新 `.venv-local` / node_modules / 数据目录，不读取维护者密钥。
+  未改变系统默认版本，没有执行部署、生产配置或数据库操作。
+- 真实执行 `python3.12 start_local.py` 复现 ensurepip 失败：启动器默认复制管理器
+  符号链接后的 Python，但 pyvenv.cfg 的 home 指向 shim 目录，找不到标准库。
+  改用解析后的解释器路径运行标准 `-m venv`；检测 pip 是否可用，在安装中断后
+  原地补齐环境并失效安装标记，不删除用户数据。补充完整 Python/venv 的错误指引。
+- 回归先失败：`OPENCAR_TEST_LOCAL_BOOTSTRAP=1 .venv/bin/python -m pytest
+  tests/test_local_bootstrap.py -k True -q` 报 `No module named pip`；修正后两种
+  全新源码安装路径（首次安装、已有 Python 但缺 pip）均通过，`2 passed`。
+  测试复制 Git 跟踪源码，不复制工作区环境或数据；CI 新增同一真实安装门槛。
+- 空白浏览器发现未配置密钥仍显示默认模型，发送后仅显示通用失败。仅 standalone
+  构建按所选服务商实际配置判断可用性；托管 alpha 保持原模型策略。复用模型配置
+  弹窗引导，关闭后保留草稿；简历暂存前也检查配置。弹窗在本地模式明确密钥存于
+  本机，避免沿用“服务器私人目录”的误导文案。聚焦回归修正前 4 失败，修正后通过。
+- README / 本地指南补齐终端打开、环境版本确认、安装中断重试，以及文件简历、
+  粘贴简历和“PDF（仅用于对话）”三种入口差别；不再把文件上传等同于已确认档案。
+- 验收：`npx vitest run --maxWorkers=2` 为 309 passed / 2 skipped；
+  `npx tsc --noEmit`、`python -m py_compile start_local.py tests/test_local_bootstrap.py`
+  和 `git diff --check` 通过。`OPENCAR_TEST_LOCAL_BROWSER=1 OPENCAR_TEST_LOCAL_INSTALL=1
+  .venv/bin/python -m pytest tests/test_local_browser.py tests/test_local_installation.py
+  tests/test_local_launcher.py -q` 为 5 passed。真实 standalone 启动和独立 alpha
+  构建通过，alpha 产物无 `127.0.0.1:8765`。
+- 实际浏览器核对首页、空岗位、空档案、导入菜单、无密钥配置与草稿保留；正常停止
+  和重启后本次测试对话仍在，页面无 JavaScript 异常。测试服务已停止，临时证据保留。
+  未使用真实模型密钥；付费模型回答、真实简历确认、真人麦克风和原生 Windows
+  不计入本次通过项。后续发布只同步源码，远端结果以本次提交的 Actions 为准。
