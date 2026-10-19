@@ -329,7 +329,7 @@ export function AccessSection({
                 {adding ? (
                   <div className="mt-1.5">
                     <input
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-line bg-panel text-[12.5px] outline-none focus:border-accent"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-line bg-panel text-[12.5px] outline-hidden focus:border-accent"
                       placeholder="搜索连接器…"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}

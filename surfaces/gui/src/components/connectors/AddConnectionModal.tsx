@@ -18,7 +18,7 @@ import { PILL_ACCENT, PILL_LINE, TAG_ACCENT } from "./ui";
 // existing ConnectSetup directly (Gmail's managed flow skips the modal entirely).
 
 const INPUT =
-  "w-full px-3 py-2 rounded-lg border border-line bg-paper text-[13px] text-ink outline-none focus:border-accent";
+  "w-full px-3 py-2 rounded-lg border border-line bg-paper text-[13px] text-ink outline-hidden focus:border-accent";
 
 export function AddConnectionModal({
   c,
@@ -80,7 +80,7 @@ export function AddConnectionModal({
                     data-testid={`modal-pane-${p}`}
                     className={
                       "px-3.5 py-1 rounded-full " +
-                      (pane === p ? "bg-panel shadow-sm text-ink border border-line" : "text-muted")
+                      (pane === p ? "bg-panel shadow-xs text-ink border border-line" : "text-muted")
                     }
                     onClick={() => setPane(p)}
                   >

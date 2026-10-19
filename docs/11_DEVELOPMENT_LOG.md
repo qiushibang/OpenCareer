@@ -2780,3 +2780,34 @@
 - 本地安装验证器 2 passed；不安装可选组件的领域测试范围为 447 passed /
   5 deselected。文档明确提供可选识别验收命令；等待本次远端全绿才公开新仓库。
 - 原私有仓库和干净历史候选分别同步，生产服务仍未部署、重启或修改数据。
+
+## 2026-10-19 — 构建依赖修复与图文安装文档
+
+- 用户确认本次同时升级样式工具并做界面回归，不部署线上。开始时工作树干净，
+  维护基线为 `a248379`；未修改 Python 核心、生产配置或用户数据。
+- 原完整 `npm audit --json` 为 7 项（5 high、2 moderate），来自 braces 和
+  postcss-selector-parser 两个根因及其依赖链。Tailwind 3.4.19 升级至 4.3.3，
+  添加同版本 PostCSS 适配器并移除不再需要的 autoprefixer；完整审计与
+  `npm audit --omit=dev --json` 均为 0 项。`npm ls` 确认旧受影响链已移除，
+  没有用忽略项或关闭检查来降低计数。
+- 依官方迁移规则把 `outline-none` / `shadow-sm` 分别迁移为 `outline-hidden` /
+  `shadow-xs`，保留强制颜色模式下的焦点轮廓。主题变量改为原生颜色值；保持
+  utilities 与旧 styles.css 的无层叠分层优先级，避免大量旧组件被覆盖。
+- 重新运行 `npm ci`、`npx tsc --noEmit` 通过；`npx vitest run --maxWorkers=2`
+  为 56 files / 303 passed / 2 skipped。`OPENCAR_TEST_LOCAL_BROWSER=1
+  OPENCAR_TEST_LOCAL_INSTALL=1 .venv/bin/python -m pytest tests/test_local_browser.py
+  tests/test_local_installation.py tests/test_local_launcher.py -q` 为 5 passed。
+- standalone 与 alpha 均构建到独立临时目录，通过；alpha 无 `127.0.0.1:8765`。
+  构建仍有既有大体积 chunk 和静态/动态混合导入提示，它们不是本次依赖安全告警。
+- 独立空数据目录中的真实浏览器验证首页、技能保留草稿、岗位详情、模型配置，
+  以及深色和 1024 像素宽配置页。前后首页截图一致，模型配置布局保持；岗位表单
+  有少量像素差异，未发现控件丢失或遮挡。页面无 JavaScript 错误，未填真实密钥，
+  未调用付费模型。截图等待技能加载后保存，避免把加载中误判为样式回归。
+- README 重写为环境准备、启动、模型密钥、首次求职流程、可选 OCR/语音、备份
+  与故障处理；新增 5 张真实界面 PNG（合计约 568 KiB），仅虚构岗位与空密钥表单。
+  本地 Markdown 渲染确认 5 张截图、图标和徽章均加载，14 个本地引用无缺失。
+- CI 的前端 Node 版本统一为 22，加入包含开发依赖的中等级别审计门槛；安全说明
+  保留旧告警历史并追加已修复状态。新的浏览器版本要求已在 README 和本地指南说明。
+- 限制：本次未重新执行全量 Python 后端/领域套件；业务 Python 未修改，已有本地
+  端到端覆盖通过。真人模型/麦克风、原生 Windows 与旧系统桌面壳仍未验收。
+  本次依赖零告警不是整个项目的绝对安全保证。远端同步需按用户选择另行核对。

@@ -66,7 +66,7 @@ export function ConnectorMessageCard({
       style={styleVars}
     >
       <header
-        className="connector-card-head flex items-center gap-2 px-3.5 py-2 border-b border-line outline-none"
+        className="connector-card-head flex items-center gap-2 px-3.5 py-2 border-b border-line outline-hidden"
         tabIndex={0}
         onMouseEnter={reveal}
         onMouseLeave={hide}

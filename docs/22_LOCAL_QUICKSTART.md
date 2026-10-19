@@ -3,6 +3,7 @@
 ## 安装与首次使用
 
 安装 Git、Python 3.12、Node.js 22 LTS，克隆源码后运行 `python3 start_local.py`。
+浏览器使用当前稳定版；样式最低要求 Chrome / Edge 111、Firefox 128 或 Safari 16.4。
 无需 Docker、PostgreSQL、Redis、Authing 或维护者的企业账号。
 首次安装需要访问 Python 包源、GitHub 和 npm。失败后可重新执行，不会删除数据。
 不要从陌生人获取所谓“共享模型密钥”。

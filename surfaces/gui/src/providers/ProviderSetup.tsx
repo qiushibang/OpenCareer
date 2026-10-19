@@ -383,7 +383,7 @@ export function ProviderForm({
   const { info, sel } = ps;
   const label = "block text-[12px] text-muted mt-3 mb-1";
   const input =
-    "w-full px-3 py-2 rounded-lg border bg-panel text-[13.5px] outline-none focus:border-accent";
+    "w-full px-3 py-2 rounded-lg border bg-panel text-[13.5px] outline-hidden focus:border-accent";
   const fieldsAll = info?.fields || [];
   const keyed = fieldsAll.some((x) => x.secret);
   // Cloud providers declare a segmented auth-method choice; the selected method's
@@ -495,7 +495,7 @@ export function ProviderForm({
                   className={
                     "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] whitespace-nowrap transition-colors " +
                     (active
-                      ? "bg-panel text-ink font-medium shadow-sm ring-1 ring-line"
+                      ? "bg-panel text-ink font-medium shadow-xs ring-1 ring-line"
                       : "text-muted hover:text-ink")
                   }
                   data-testid={`${tp}-choice-${choice.key}-${c.value}`}

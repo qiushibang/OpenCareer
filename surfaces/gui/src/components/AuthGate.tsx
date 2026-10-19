@@ -80,7 +80,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return (
       <>
         {children}
-        <div className="fixed right-4 top-3 z-50 flex items-center gap-2 rounded-xl border border-line bg-panel/95 px-3 py-2 text-xs shadow-sm backdrop-blur">
+        <div className="fixed right-4 top-3 z-50 flex items-center gap-2 rounded-xl border border-line bg-panel/95 px-3 py-2 text-xs shadow-xs backdrop-blur">
           <span className="max-w-40 truncate text-muted">
             {session.user?.display_name || session.user?.email || "已登录"}
           </span>

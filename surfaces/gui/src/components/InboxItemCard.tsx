@@ -30,7 +30,7 @@ const OPT_BASE =
 const OPT_OFF = "border-line bg-paper text-ink hover:border-accent hover:bg-accentSoft/50";
 const OPT_ON = "border-accent bg-accentSoft text-accent font-medium";
 const INPUT =
-  "flex-1 min-w-0 rounded-lg bg-paper border border-line px-3 py-2 text-[13px] text-ink placeholder:text-faint outline-none focus:border-lineStrong";
+  "flex-1 min-w-0 rounded-lg bg-paper border border-line px-3 py-2 text-[13px] text-ink placeholder:text-faint outline-hidden focus:border-lineStrong";
 
 export function InboxItemCard({
   item,

@@ -455,7 +455,7 @@ function AlphaDefaultModelCard({
       </p>
       <div className="flex gap-2 items-center">
         <input
-          className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-line bg-paper text-[13px] text-ink outline-none focus:border-accent"
+          className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-line bg-paper text-[13px] text-ink outline-hidden focus:border-accent"
           list="byok-models"
           value={value}
           placeholder="例如 deepseek:deepseek-chat"
@@ -741,7 +741,7 @@ function AddForm({
         onChange={(e) => setText(e.target.value)}
         spellCheck={false}
         rows={9}
-        className="w-full font-mono text-[12px] px-3 py-2.5 rounded-lg border border-line bg-paper text-ink outline-none focus:border-accent resize-y"
+        className="w-full font-mono text-[12px] px-3 py-2.5 rounded-lg border border-line bg-paper text-ink outline-hidden focus:border-accent resize-y"
       />
       <div className="flex items-center gap-3">
         <button className={BTN_ACCENT} onClick={save}>

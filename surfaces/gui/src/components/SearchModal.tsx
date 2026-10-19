@@ -120,7 +120,7 @@ export function SearchModal({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="搜索对话"
-            className="flex-1 bg-transparent outline-none text-[15px] text-ink placeholder:text-faint"
+            className="flex-1 bg-transparent outline-hidden text-[15px] text-ink placeholder:text-faint"
           />
           <kbd className="text-[10.5px] text-faint bg-paper border border-line rounded px-1.5 py-0.5 font-sans">
             Esc

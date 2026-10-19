@@ -430,7 +430,7 @@ export function Sidebar(props: Props) {
       >
         {editing ? (
           <input
-            className="flex-1 min-w-0 px-1.5 py-0.5 rounded-md bg-panel border border-accent text-[13px] text-ink outline-none"
+            className="flex-1 min-w-0 px-1.5 py-0.5 rounded-md bg-panel border border-accent text-[13px] text-ink outline-hidden"
             value={editValue}
             autoFocus
             onClick={(e) => e.stopPropagation()}
@@ -504,7 +504,7 @@ export function Sidebar(props: Props) {
             read as noise in both grouped and chronological). */}
         {editing ? (
           <input
-            className="flex-1 min-w-0 px-1.5 py-0.5 rounded-md bg-panel border border-accent text-[13px] text-ink outline-none"
+            className="flex-1 min-w-0 px-1.5 py-0.5 rounded-md bg-panel border border-accent text-[13px] text-ink outline-hidden"
             value={editValue}
             autoFocus
             onClick={(e) => e.stopPropagation()}

@@ -382,7 +382,7 @@ export function GalleryModal({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="搜索 Agent"
-              className="w-[180px] px-3 py-1.5 rounded-lg border border-line bg-paper text-[12.5px] text-ink outline-none focus:border-accent"
+              className="w-[180px] px-3 py-1.5 rounded-lg border border-line bg-paper text-[12.5px] text-ink outline-hidden focus:border-accent"
             />
           )}
           <button

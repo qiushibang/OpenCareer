@@ -63,7 +63,7 @@ const CARD = "rounded-xl2 border border-line bg-panel";
 const FIELD_LABEL = "text-[12.5px] font-medium text-ink";
 const FIELD_HELP = "text-[12px] text-muted mt-1.5 leading-relaxed";
 const INPUT =
-  "flex-1 min-w-0 px-3 py-2 rounded-lg border border-line bg-paper text-[13px] text-ink outline-none focus:border-accent";
+  "flex-1 min-w-0 px-3 py-2 rounded-lg border border-line bg-paper text-[13px] text-ink outline-hidden focus:border-accent";
 const BTN_ACCENT = "text-[12.5px] px-3 py-2 rounded-lg bg-accent text-white shrink-0 disabled:opacity-40";
 const BTN_BORDERED =
   "text-[12.5px] px-3 py-2 rounded-lg border border-line bg-paper hover:border-lineStrong shrink-0";
@@ -855,7 +855,7 @@ function TokenSavingsCard() {
             max={100}
             value={pdf.pdf_max_pages}
             data-testid="pdf-max-pages"
-            className="w-16 px-2 py-1.5 rounded-lg border border-line bg-paper text-[13px] text-ink outline-none focus:border-accent"
+            className="w-16 px-2 py-1.5 rounded-lg border border-line bg-paper text-[13px] text-ink outline-hidden focus:border-accent"
             onChange={(e) => save({ pdf_max_pages: Math.max(1, Math.min(Number(e.target.value) || 20, 100)) })}
           />
         </label>
@@ -867,7 +867,7 @@ function TokenSavingsCard() {
             max={10}
             value={pdf.pdf_max_mb}
             data-testid="pdf-max-mb"
-            className="w-16 px-2 py-1.5 rounded-lg border border-line bg-paper text-[13px] text-ink outline-none focus:border-accent"
+            className="w-16 px-2 py-1.5 rounded-lg border border-line bg-paper text-[13px] text-ink outline-hidden focus:border-accent"
             onChange={(e) => save({ pdf_max_mb: Math.max(1, Math.min(Number(e.target.value) || 10, 10)) })}
           />
           <span className="text-[12.5px] text-muted">MB</span>
@@ -935,7 +935,7 @@ function CompactionCard() {
             max={95}
             value={Math.round(cfg.compaction_threshold_pct * 100)}
             data-testid="compaction-threshold"
-            className="w-16 px-2 py-1.5 rounded-lg border border-line bg-paper text-[13px] text-ink outline-none focus:border-accent"
+            className="w-16 px-2 py-1.5 rounded-lg border border-line bg-paper text-[13px] text-ink outline-hidden focus:border-accent"
             onChange={(e) =>
               save({
                 compaction_threshold_pct:
@@ -954,7 +954,7 @@ function CompactionCard() {
             step={10_000}
             value={cfg.compaction_cap_tokens}
             data-testid="compaction-cap"
-            className="w-28 px-2 py-1.5 rounded-lg border border-line bg-paper text-[13px] text-ink outline-none focus:border-accent"
+            className="w-28 px-2 py-1.5 rounded-lg border border-line bg-paper text-[13px] text-ink outline-hidden focus:border-accent"
             onChange={(e) =>
               save({
                 compaction_cap_tokens: Math.max(
@@ -977,7 +977,7 @@ function CompactionCard() {
         <select
           value={cfg.compaction_model}
           data-testid="compaction-model"
-          className="px-2 py-1.5 rounded-lg border border-line bg-paper text-[13px] text-ink outline-none focus:border-accent"
+          className="px-2 py-1.5 rounded-lg border border-line bg-paper text-[13px] text-ink outline-hidden focus:border-accent"
           onChange={(e) => save({ compaction_model: e.target.value })}
         >
           <option value="">使用当前对话模型（默认）</option>
@@ -1064,7 +1064,7 @@ function SidebarCard() {
           min={1}
           max={50}
           value={peek}
-          className="w-16 px-2 py-1.5 rounded-lg border border-line bg-paper text-[13px] text-ink outline-none focus:border-accent"
+          className="w-16 px-2 py-1.5 rounded-lg border border-line bg-paper text-[13px] text-ink outline-hidden focus:border-accent"
           onChange={(e) => save(Number(e.target.value))}
         />
       </label>

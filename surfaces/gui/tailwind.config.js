@@ -1,13 +1,9 @@
 /** Tailwind config — mirrors platform/ui-mocks/redesign.html so the app can use the mock's
  *  exact utility classes. Colors map to the CSS custom properties already defined in styles.css
  *  (so light/dark theming flows through one source of truth). */
-// Tokens are hex CSS vars (shared with styles.css), which Tailwind can't alpha-multiply for
-// `/NN` opacity utilities. Wrap each in color-mix so `bg-panel/70` etc. work, while bare
-// `var(--x)` usage in styles.css stays intact. (color-mix is supported in the Chromium webview.)
-const tok = (name) => ({ opacityValue }) =>
-  opacityValue === undefined
-    ? `var(${name})`
-    : `color-mix(in srgb, var(${name}) calc(${opacityValue} * 100%), transparent)`;
+// Tailwind 4 applies opacity modifiers with color-mix itself. Keep tokens as plain
+// CSS variable values so the same classes follow both palettes in styles.css.
+const tok = (name) => `var(${name})`;
 
 /** @type {import('tailwindcss').Config} */
 export default {

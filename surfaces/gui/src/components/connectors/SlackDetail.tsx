@@ -437,7 +437,7 @@ function PersonPicker({
         >
           <input
             autoFocus
-            className="w-full bg-paper border border-line rounded-lg px-2 py-1 text-[12.5px] outline-none placeholder:text-faint"
+            className="w-full bg-paper border border-line rounded-lg px-2 py-1 text-[12.5px] outline-hidden placeholder:text-faint"
             placeholder="输入姓名…"
             value={q}
             onChange={(e) => setQ(e.target.value)}

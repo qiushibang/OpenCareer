@@ -208,7 +208,7 @@ function ChipListRow({
           </span>
         ))}
         <input
-          className="flex-1 min-w-[140px] bg-transparent text-[12.5px] outline-none placeholder:text-faint"
+          className="flex-1 min-w-[140px] bg-transparent text-[12.5px] outline-hidden placeholder:text-faint"
           placeholder={placeholder}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
