@@ -3,6 +3,14 @@ import { describe, expect, it } from "vitest";
 import { careerProfileFieldLabel } from "./careerProfileFields";
 
 describe("careerProfileFieldLabel", () => {
+  it("labels imported basic fields and names by section", () => {
+    expect(careerProfileFieldLabel("address")).toBe("地址");
+    expect(careerProfileFieldLabel("city")).toBe("城市");
+    expect(careerProfileFieldLabel("target_role")).toBe("目标岗位");
+    expect(careerProfileFieldLabel("name", "basic")).toBe("姓名");
+    expect(careerProfileFieldLabel("name", "project")).toBe("项目名称");
+    expect(careerProfileFieldLabel("name", "skill")).toBe("技能名称");
+  });
   it("translates known Career Vault fields", () => {
     expect(careerProfileFieldLabel("name")).toBe("姓名");
     expect(careerProfileFieldLabel("phone")).toBe("手机号");

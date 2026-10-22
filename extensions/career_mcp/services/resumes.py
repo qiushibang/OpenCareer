@@ -714,7 +714,9 @@ class ResumeService:
             text = html.escape(paragraph.text.strip())
             if not text:
                 continue
-            style = (paragraph.style.name or "").lower()
+            paragraph_style = paragraph.style
+            style_name = paragraph_style.name if paragraph_style is not None else ""
+            style = (style_name or "").lower()
             if style.startswith("heading"):
                 level = style.removeprefix("heading").strip() or "2"
                 level = level if level in {"1", "2", "3", "4", "5", "6"} else "2"

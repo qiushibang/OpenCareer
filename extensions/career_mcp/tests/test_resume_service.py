@@ -423,6 +423,22 @@ def test_profile_page_reads_versions_and_original_without_private_path(tmp_path)
     assert "private_path" not in original
 
 
+def test_docx_preview_handles_missing_default_paragraph_style():
+    document = Document()
+    document.add_paragraph("Fictional <script>alert(1)</script> resume")
+    document.add_heading("Education", level=2)
+    document.styles["Normal"].delete()
+    stream = BytesIO()
+    document.save(stream)
+    assert Document(BytesIO(stream.getvalue())).paragraphs[0].style is None
+
+    rendered = ResumeService._docx_html(stream.getvalue())
+
+    assert b"<p>Fictional &lt;script&gt;alert(1)&lt;/script&gt; resume</p>" in rendered
+    assert b"<h2>Education</h2>" in rendered
+    assert b"<script>" not in rendered
+
+
 def test_docx_profile_original_renders_escaped_read_only_html(tmp_path):
     stream = BytesIO()
     document = Document()

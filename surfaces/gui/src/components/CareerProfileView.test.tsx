@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { CareerProfileView } from "./CareerProfileView";
 
@@ -19,7 +19,8 @@ vi.mock("../api", () => api);
 
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
+  vi.resetAllMocks();
+  vi.unstubAllGlobals();
 });
 
 const resume = {
@@ -59,6 +60,88 @@ const resume = {
 };
 
 describe("CareerProfileView", () => {
+  it("uses section-specific Chinese labels without changing facts", async () => {
+    api.getCareerResumes.mockResolvedValue({ ok: true, resumes: [resume] });
+    api.getCareerResume.mockResolvedValue({ ok: true, resume: {
+      ...resume,
+      sections: { ...resume.sections,
+        basic: { name: "林***", address: null, city: "杭州", target_role: "AI 产品经理" },
+        project: [{ name: "校园问答助手（虚构）" }],
+      },
+    } });
+    render(<CareerProfileView onImportResume={vi.fn()} />);
+    await screen.findByText("校园问答助手（虚构）");
+    for (const label of ["地址", "城市", "目标岗位", "项目名称", "技能名称"]) {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
+    expect(screen.getAllByText("姓名")).toHaveLength(1);
+    expect(screen.getByText("Python")).toBeTruthy();
+  });
+
+  it("stops loading on preview failure and can retry", async () => {
+    api.getCareerResumes.mockResolvedValue({ ok: true, resumes: [resume] });
+    api.getCareerResume.mockResolvedValue({ ok: true, resume });
+    api.getCareerResumeOriginal.mockResolvedValue({ ok: true, original: {
+      filename: "test.docx", source_kind: "docx", size: 100, preview_kind: "html",
+    } });
+    api.getCareerResumeOriginalContent.mockRejectedValueOnce(new Error("private backend error"))
+      .mockResolvedValueOnce("<article>虚构简历预览</article>");
+    render(<CareerProfileView onImportResume={vi.fn()} />);
+    await screen.findByText("北京航空航天大学");
+    fireEvent.click(screen.getByRole("button", { name: "原始简历" }));
+    await screen.findByText("无法预览原始简历。");
+    expect(screen.queryByText("正在生成安全预览…")).toBeNull();
+    expect(screen.queryByText("正在读取原始简历…")).toBeNull();
+    expect(screen.queryByText("private backend error")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "重新加载预览" }));
+    const preview = await screen.findByTitle("原始简历预览");
+    expect(preview.getAttribute("srcdoc")).toBe("<article>虚构简历预览</article>");
+    expect(preview.getAttribute("sandbox")).toBe("");
+    expect(api.getCareerResumeOriginalContent).toHaveBeenLastCalledWith("resume-1", "html");
+    expect(screen.queryByText("无法预览原始简历。")).toBeNull();
+  });
+  it("handles unsuccessful metadata without leaving a loading message", async () => {
+    api.getCareerResumes.mockResolvedValue({ ok: true, resumes: [resume] });
+    api.getCareerResume.mockResolvedValue({ ok: true, resume });
+    api.getCareerResumeOriginal.mockResolvedValue({ ok: false });
+    render(<CareerProfileView onImportResume={vi.fn()} />);
+    await screen.findByText("北京航空航天大学");
+    fireEvent.click(screen.getByRole("button", { name: "原始简历" }));
+    await screen.findByRole("alert");
+    expect(screen.queryByText("正在读取原始简历…")).toBeNull();
+    expect(screen.queryByText("正在生成安全预览…")).toBeNull();
+    expect(api.getCareerResumeOriginalContent).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "简历内容" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("discards and releases a preview that finishes after switching resumes", async () => {
+    const second = { ...resume, id: "resume-2", display_name: "第二份简历" };
+    api.getCareerResumes.mockResolvedValue({ ok: true, resumes: [resume, second] });
+    api.getCareerResume.mockImplementation(async (id: string) => ({ ok: true, resume: id === resume.id ? resume : second }));
+    api.getCareerResumeOriginal.mockResolvedValue({ ok: true, original: {
+      filename: "test.pdf", source_kind: "pdf", size: 100, preview_kind: "pdf",
+    } });
+    let finishPreview!: (url: string) => void;
+    api.getCareerResumeOriginalContent.mockImplementationOnce(() => new Promise<string>((resolve) => { finishPreview = resolve; }))
+      .mockResolvedValue("blob:second-preview");
+    const revokeObjectURL = vi.fn();
+    class TestURL extends URL { static revokeObjectURL = revokeObjectURL; }
+    vi.stubGlobal("URL", TestURL);
+    render(<CareerProfileView onImportResume={vi.fn()} />);
+    await screen.findByText("北京航空航天大学");
+    fireEvent.click(screen.getByRole("button", { name: "原始简历" }));
+    await waitFor(() => expect(api.getCareerResumeOriginalContent).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole("button", { name: /第二份简历 PDF/ }));
+    await screen.findByText("北京航空航天大学");
+    await act(async () => finishPreview("blob:stale-preview"));
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:stale-preview");
+    expect(screen.queryByTitle("原始简历预览")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "原始简历" }));
+    expect((await screen.findByTitle("原始简历预览")).getAttribute("src")).toBe("blob:second-preview");
+    expect(api.getCareerResumeOriginalContent).toHaveBeenLastCalledWith("resume-2");
+  });
+
   it("stacks the resume library and detail on mobile", async () => {
     api.getCareerResumes.mockResolvedValue({ ok: true, resumes: [resume] });
     api.getCareerResume.mockResolvedValue({ ok: true, resume });

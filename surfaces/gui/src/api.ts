@@ -2109,11 +2109,13 @@ export async function getCareerResumeOriginal(
 
 export async function getCareerResumeOriginalContent(
   resumeId: string,
+  format: "url" | "html" = "url",
 ): Promise<string> {
   const res = await fetch(
     `${httpBase()}/v1/career/resumes/${encodeURIComponent(resumeId)}/original/content`,
   );
   if (!res.ok) throw new Error("无法读取原始简历");
+  if (format === "html") return res.text();
   return URL.createObjectURL(await res.blob());
 }
 

@@ -4,6 +4,9 @@ const FIELD_LABELS: Record<string, string> = {
   email: "邮箱",
   birth_date: "出生日期",
   location: "所在地",
+  address: "地址",
+  city: "城市",
+  target_role: "目标岗位",
   summary: "个人简介",
   github: "GitHub",
   school: "学校",
@@ -26,7 +29,11 @@ const FIELD_LABELS: Record<string, string> = {
   evidence: "佐证",
 };
 
-export function careerProfileFieldLabel(key: string): string {
+export function careerProfileFieldLabel(key: string, section?: string): string {
   const normalized = key.trim();
+  if (normalized === "name") {
+    if (section === "project") return "项目名称";
+    if (section === "skill") return "技能名称";
+  }
   return FIELD_LABELS[normalized] || normalized.replace(/[_-]+/g, " ");
 }

@@ -37,7 +37,7 @@ const formatDate = (value: string) =>
     minute: "2-digit",
   }).format(new Date(value));
 
-function FactValue({ value }: { value: unknown }) {
+function FactValue({ value, section }: { value: unknown; section?: string }) {
   if (value == null || value === "") {
     return <span className="text-faint">未填写</span>;
   }
@@ -49,7 +49,7 @@ function FactValue({ value }: { value: unknown }) {
       <div className="space-y-2">
         {value.map((item, index) => (
           <div key={index} className="rounded-lg bg-paper px-3 py-2.5">
-            <FactValue value={item} />
+            <FactValue value={item} section={section} />
           </div>
         ))}
       </div>
@@ -61,9 +61,9 @@ function FactValue({ value }: { value: unknown }) {
         {Object.entries(value as Record<string, unknown>).map(
           ([key, entry]) => (
             <div key={key} className="contents">
-              <dt className="text-muted">{careerProfileFieldLabel(key)}</dt>
+              <dt className="text-muted">{careerProfileFieldLabel(key, section)}</dt>
               <dd className="min-w-0 break-words">
-                <FactValue value={entry} />
+                <FactValue value={entry} section={section} />
               </dd>
             </div>
           ),
@@ -86,6 +86,9 @@ export function CareerProfileView({
   const [versions, setVersions] = useState<CareerProfileVersion[]>([]);
   const [original, setOriginal] = useState<CareerOriginal | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState("");
+  const [previewAttempt, setPreviewAttempt] = useState(0);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState("");
@@ -144,10 +147,9 @@ export function CareerProfileView({
     setTab("profile");
     setVersions([]);
     setOriginal(null);
-    if (previewUrl && typeof URL.revokeObjectURL === "function") {
-      URL.revokeObjectURL(previewUrl);
-    }
     setPreviewUrl("");
+    setPreviewHtml(null);
+    setPreviewError("");
     void loadResume();
   }, [selectedId]);
 
@@ -158,18 +160,38 @@ export function CareerProfileView({
         .then((result) => setVersions(result.versions || []))
         .catch(() => setError("无法读取版本记录。"));
     }
-    if (tab === "original" && !original) {
-      Promise.all([
-        getCareerResumeOriginal(selectedId),
-        getCareerResumeOriginalContent(selectedId),
-      ])
-        .then(([result, url]) => {
-          if (result.original) setOriginal(result.original);
-          setPreviewUrl(url);
-        })
-        .catch(() => setError("无法预览原始简历。"));
-    }
-  }, [tab, selectedId, versions.length, original]);
+  }, [tab, selectedId, versions.length]);
+
+  useEffect(() => {
+    if (tab !== "original" || !selectedId) return;
+    let current = true;
+    setOriginal(null);
+    setPreviewUrl("");
+    setPreviewHtml(null);
+    setPreviewError("");
+    const loadOriginal = async () => {
+      try {
+        const result = await getCareerResumeOriginal(selectedId);
+        if (!current) return;
+        if (!result.ok || !result.original) throw new Error("Preview unavailable");
+        setOriginal(result.original);
+        if (result.original.preview_kind === "html") {
+          // Embedded browsers can block blob navigation. Keep escaped DOCX HTML
+          // in a sandboxed srcDoc frame, never in the application's DOM.
+          const html = await getCareerResumeOriginalContent(selectedId, "html");
+          if (current) setPreviewHtml(html);
+          return;
+        }
+        const url = await getCareerResumeOriginalContent(selectedId);
+        if (current) setPreviewUrl(url);
+        else if (typeof URL.revokeObjectURL === "function") URL.revokeObjectURL(url);
+      } catch {
+        if (current) setPreviewError("无法预览原始简历。");
+      }
+    };
+    void loadOriginal();
+    return () => { current = false; };
+  }, [tab, selectedId, previewAttempt]);
 
   useEffect(
     () => () => {
@@ -444,7 +466,7 @@ export function CareerProfileView({
                       <h2 className="text-sm font-semibold mb-3">
                         {SECTION_NAMES[section] || section}
                       </h2>
-                      <FactValue value={value} />
+                      <FactValue value={value} section={section} />
                     </section>
                   ),
                 )}
@@ -456,7 +478,7 @@ export function CareerProfileView({
                 <div className="px-4 py-3 border-b border-line flex items-center justify-between">
                   <div>
                     <div className="text-sm font-medium">
-                      {original?.filename || "正在读取原始简历…"}
+                      {original?.filename || (previewError ? "原始简历预览失败" : "正在读取原始简历…")}
                     </div>
                     {original && (
                       <div className="text-[11px] text-muted mt-0.5">
@@ -479,7 +501,24 @@ export function CareerProfileView({
                     </button>
                   )}
                 </div>
-                {previewUrl ? (
+                {previewError ? (
+                  <div className="h-64 flex flex-col items-center justify-center gap-3">
+                    <p role="alert" className="text-red-600">{previewError}</p>
+                    <button
+                      className="px-3 py-1.5 rounded-lg border border-line text-[12px]"
+                      onClick={() => setPreviewAttempt((attempt) => attempt + 1)}
+                    >
+                      重新加载预览
+                    </button>
+                  </div>
+                ) : previewHtml !== null ? (
+                  <iframe
+                    title="原始简历预览"
+                    srcDoc={previewHtml}
+                    sandbox=""
+                    className="w-full h-[680px] bg-white"
+                  />
+                ) : previewUrl ? (
                   <iframe
                     title="原始简历预览"
                     src={previewUrl}
