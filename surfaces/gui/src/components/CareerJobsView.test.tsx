@@ -10,6 +10,7 @@ import {
 import { CareerJobsView } from "./CareerJobsView";
 
 const api = vi.hoisted(() => ({
+  isLocal: () => false,
   getCareerJobs: vi.fn(),
   getCareerJob: vi.fn(),
   getCareerJobFilters: vi.fn(),
@@ -18,6 +19,9 @@ const api = vi.hoisted(() => ({
 }));
 
 vi.mock("../api", () => api);
+vi.mock("./LocalJobSyncBanner", () => ({
+  LocalJobSyncBanner: ({ onUpdated }: { onUpdated: () => void }) => <button onClick={onUpdated}>模拟后台岗位更新</button>,
+}));
 
 const jobs = [
   {
@@ -150,6 +154,18 @@ function arrange() {
 }
 
 describe("CareerJobsView", () => {
+  it("preserves the selected job and unsaved application note during background imports", async () => {
+    arrange();
+    render(<CareerJobsView />);
+    await screen.findByLabelText("申请备注");
+    fireEvent.change(screen.getByLabelText("申请备注"), { target: { value: "还未保存的申请备注" } });
+    api.getCareerJobs.mockResolvedValue({ ok: true, jobs: [jobs[1]], total: 30 });
+    fireEvent.click(screen.getByRole("button", { name: "模拟后台岗位更新" }));
+    await waitFor(() => expect(screen.getByText("30 个岗位")).toBeTruthy());
+    expect((screen.getByLabelText("申请备注") as HTMLTextAreaElement).value).toBe("还未保存的申请备注");
+    expect(api.getCareerJob).toHaveBeenCalledTimes(1);
+    expect(api.getCareerJob).toHaveBeenLastCalledWith("job-1");
+  });
   it("opens one shared interview setup from list and detail entries", async () => {
     arrange();
     api.getCareerResumes.mockResolvedValue({

@@ -35,6 +35,7 @@ def local_environment(data: Path, port: int, backend_port: int) -> dict[str, str
         "CAREER_PRIVATE_DIR": str(data / "private"),
         "OPENCAR_ALPHA_WORKSPACE": str(data / "workspace"),
         "OPENCAR_ALPHA_TEST": "1", "OPENCAR_HEADLESS": "1",
+        "OPENCAR_LOCAL_MODE": "1",
         "OPENCAR_EXTRA_ORIGINS": f"http://127.0.0.1:{port}",
         "COWORKER_EXIT_WITH_PARENT": "1", "COWORKER_PARENT_PID": str(os.getpid()),
         "VITE_ALPHA_UI_PORT": str(port), "VITE_ALPHA_BACKEND_PORT": str(backend_port),
@@ -46,7 +47,7 @@ def local_environment(data: Path, port: int, backend_port: int) -> dict[str, str
 def install_dependencies(env: dict[str, str]) -> Path:
     python = ROOT / ".venv-local" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     marker = ROOT / ".venv-local" / ".opencareer-dependencies"
-    fingerprint = hashlib.sha256((ROOT / "pyproject.toml").read_bytes()).hexdigest()
+    fingerprint = hashlib.sha256((ROOT / "pyproject.toml").read_bytes() + b":local-browser-v1").hexdigest()
     usable = python.exists() and subprocess.run(
         [str(python), "-m", "pip", "--version"], env=env,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -66,8 +67,19 @@ def install_dependencies(env: dict[str, str]) -> Path:
             ) from exc
         marker.unlink(missing_ok=True)
     if not marker.exists() or marker.read_text() != fingerprint:
-        subprocess.run([str(python), "-m", "pip", "install", "-e", str(ROOT)], env=env, check=True)
+        subprocess.run([str(python), "-m", "pip", "install", "-e", f"{ROOT}[browser]"], env=env, check=True)
         marker.write_text(fingerprint)
+    # Browser-backed official sources use the existing optional browser extra.
+    # A failed browser download must not prevent API-backed sources or the app.
+    browser_ready = subprocess.run(
+        [str(python), "-c", "from playwright.sync_api import sync_playwright; "
+         "p = sync_playwright().start(); b = p.chromium.launch(headless=True); b.close(); p.stop()"],
+        env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    ).returncode == 0
+    if not browser_ready:
+        print("准备官方招聘源所需的 Chromium 浏览器…", flush=True)
+        if subprocess.run([str(python), "-m", "playwright", "install", "chromium"], env=env).returncode:
+            print("Chromium 准备失败：其他岗位源仍可采集。可稍后安装浏览器并在岗位雷达重试。", flush=True)
     npm = shutil.which("npm")
     if not npm:
         raise RuntimeError("请先安装 Node.js 22 LTS（包含 npm），然后重新运行。")
@@ -150,6 +162,7 @@ def run_local(args: argparse.Namespace) -> int:
     # Build output is per installation, never deploy/web or the production alpha bundle.
     subprocess.run([node, str(vite), "build", "--mode", "standalone", "--outDir", str(dist), "--emptyOutDir"], cwd=gui, env=env, check=True)
     processes: list[subprocess.Popen] = []
+    job_sync: subprocess.Popen | None = None
     try:
         processes.append(subprocess.Popen(
             [str(python), "-m", "coworker.server.run", "--cwd", str(data / "workspace"),
@@ -164,6 +177,12 @@ def run_local(args: argparse.Namespace) -> int:
         ))
         url = f"http://127.0.0.1:{args.port}"
         wait_ready(url, processes)
+        if not args.no_job_sync:
+            job_sync = subprocess.Popen(
+                [str(python), "-m", "extensions.career_mcp.local_jobs"],
+                cwd=ROOT, env=env, start_new_session=os.name == "posix",
+            )
+            print("岗位雷达正在后台采集官方岗位，可直接打开页面查看进度；无需模型密钥。", flush=True)
         print(f"\nOpenCareer 本地版已启动：{url}\n数据目录：{data}\n仅本机可访问。请在页面配置你自己的模型；Ctrl+C 停止，数据会保留。", flush=True)
         if not args.no_browser:
             webbrowser.open(url)
@@ -171,6 +190,8 @@ def run_local(args: argparse.Namespace) -> int:
             time.sleep(0.5)
         raise RuntimeError("本地服务意外退出，已停止本次启动的其他进程。")
     finally:
+        if job_sync is not None:
+            stop_process(job_sync)
         for process in reversed(processes):
             stop_process(process)
 
@@ -181,6 +202,7 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=1422, help="Local browser port")
     parser.add_argument("--backend-port", type=int, default=8767)
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--no-job-sync", action="store_true", help="关闭本次后台岗位采集（离线使用或测试）")
     parser.add_argument("--skip-install", action="store_true", help="Use the current Python and installed Node dependencies (development/CI only)")
     args = parser.parse_args()
     if args.port == args.backend_port or not all(1024 <= p <= 65535 for p in (args.port, args.backend_port)):

@@ -1835,6 +1835,28 @@ def create_app(
         except Exception as exc:
             return career_job_error(exc)
 
+    @app.get("/v1/career/jobs/sync")
+    def career_local_job_sync_get():
+        if os.environ.get("OPENCAR_LOCAL_MODE") != "1":
+            return JSONResponse({"ok": False}, status_code=404)
+        from extensions.career_mcp.config import CareerConfig
+        from extensions.career_mcp.local_jobs import read_status
+        return {"ok": True, **read_status(CareerConfig.from_env())}
+
+    @app.post("/v1/career/jobs/sync")
+    def career_local_job_sync_post():
+        if os.environ.get("OPENCAR_LOCAL_MODE") != "1":
+            return JSONResponse({"ok": False}, status_code=404)
+        from extensions.career_mcp.config import CareerConfig
+        from extensions.career_mcp.local_jobs import read_status, request_refresh
+        config = CareerConfig.from_env()
+        state = read_status(config)
+        # Ignore repeat clicks during a live cycle and limit completed-cycle refreshes.
+        if (state["state"] == "running" and time.time() - state["updated_at"] < 1200
+                or time.time() - state["updated_at"] < 60):
+            return {"ok": True, "queued": False}
+        return {"ok": True, "queued": request_refresh(config)}
+
     @app.get("/v1/career/jobs/{job_id}/tracking")
     def career_job_tracking_get(job_id: str, request: Request):
         try:

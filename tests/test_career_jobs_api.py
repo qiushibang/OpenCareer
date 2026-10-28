@@ -16,6 +16,17 @@ JD = """职位：大模型算法工程师
 任职要求：
 1. 熟悉 Python
 """
+
+def test_job_sync_is_local_only_and_does_not_run_a_crawler_in_the_request(tmp_path, monkeypatch):
+    client, _ = _client_with_jobs(tmp_path, monkeypatch)
+    assert client.get("/v1/career/jobs/sync").status_code == 404
+    assert client.post("/v1/career/jobs/sync").status_code == 404
+    monkeypatch.setenv("OPENCAR_LOCAL_MODE", "1")
+    assert client.get("/v1/career/jobs/sync").json()["state"] == "waiting"
+    assert client.post("/v1/career/jobs/sync").json() == {"ok": True, "queued": True}
+    assert client.post("/v1/career/jobs/sync").json() == {"ok": True, "queued": False}
+    assert (tmp_path / "career" / "local-job-sync.request").is_file()
+
 def _client_with_jobs(tmp_path, monkeypatch) -> tuple[TestClient, str]:
     monkeypatch.setenv("COWORKER_STATE_DIR", str(tmp_path / "state"))
     monkeypatch.setenv("CAREER_DATA_DIR", str(tmp_path / "career"))

@@ -51,7 +51,7 @@ def running(tmp_path: Path, port: int, backend_port: int, *, root: Path = ROOT,
                "REDIS_URL": "redis://invalid.invalid", "OPENCAR_AUTH_ISSUER": "https://invalid.invalid",
                "OPENCAR_USER_TOKENS": "wrong:inherited", "COWORKER_API_TOKEN": "inherited-do-not-use"}
         process = subprocess.Popen(
-            [python, str(root / "start_local.py"), *([] if install else ["--skip-install"]), "--no-browser",
+            [python, str(root / "start_local.py"), *([] if install else ["--skip-install"]), "--no-browser", "--no-job-sync",
              "--port", str(port), "--backend-port", str(backend_port),
              "--data-dir", str(tmp_path / "data")], stdout=log, stderr=log, env=env,
         )
@@ -89,6 +89,8 @@ def test_local_installation_is_isolated_guarded_and_persistent(tmp_path):
         assert request(base)[0] == 200
         assert json.loads(request(api + "/v1/auth/session")[1])["configured"] is False
         assert request(f"http://127.0.0.1:{backend_port}/v1/providers")[0] == 401
+        assert request(f"http://127.0.0.1:{backend_port}/v1/career/jobs/sync")[0] == 401
+        assert request(api + "/v1/career/jobs/sync", {}, headers={"Origin": "https://evil.example"})[0] == 403
         assert request(api + "/v1/providers", headers={"Origin": "https://evil.example"})[0] == 403
         assert request(api + "/v1/providers", headers={"Host": f"evil.example:{port}"})[0] == 403
         assert request(api + "/v1/providers", headers={"Origin": "null"})[0] == 403

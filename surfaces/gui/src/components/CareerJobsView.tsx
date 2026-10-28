@@ -1,4 +1,4 @@
-import { FormEvent, MouseEvent, useEffect, useState } from "react";
+import { FormEvent, MouseEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import {
   getCareerResumes,
@@ -19,6 +19,7 @@ import {
 } from "../careerJobLabels";
 import type { ResumeCoachLaunchPayload } from "../careerResumeCoach";
 import { CareerResumeCoachLauncher } from "./CareerResumeCoachLauncher";
+import { LocalJobSyncBanner } from "./LocalJobSyncBanner";
 
 const PAGE_SIZE = 20;
 
@@ -106,6 +107,9 @@ export function CareerJobsView({
   >("");
   const [offset, setOffset] = useState(0);
   const [listRevision, setListRevision] = useState(0);
+  const [catalogRevision, setCatalogRevision] = useState(0);
+  const refreshCatalog = useCallback(() => setCatalogRevision(value => value + 1), []);
+  const previousList = useRef({ criteria: "", catalogRevision: 0 });
   const [jobs, setJobs] = useState<CareerJobSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [selectedId, setSelectedId] = useState("");
@@ -140,10 +144,15 @@ export function CareerJobsView({
         if (result.ok && result.filters) setFilters(result.filters);
       })
       .catch(() => undefined);
-  }, []);
+  }, [listRevision, catalogRevision]);
 
   useEffect(() => {
     let current = true;
+    const criteria = JSON.stringify([query, companySlug, location, recruitmentType,
+      status, favoriteOnly, applicationStatus, offset]);
+    const preserveSelection = previousList.current.criteria === criteria
+      && previousList.current.catalogRevision !== catalogRevision;
+    previousList.current = { criteria, catalogRevision };
     setLoading(true);
     setError("");
     getCareerJobs({
@@ -169,7 +178,7 @@ export function CareerJobsView({
         setJobs(nextJobs);
         setTotal(result.total || 0);
         setSelectedId((value) =>
-          nextJobs.some((job) => job.id === value)
+          (preserveSelection && value) || nextJobs.some((job) => job.id === value)
             ? value
             : nextJobs[0]?.id || "",
         );
@@ -193,6 +202,7 @@ export function CareerJobsView({
     applicationStatus,
     offset,
     listRevision,
+    catalogRevision,
   ]);
 
   useEffect(() => {
@@ -415,6 +425,7 @@ export function CareerJobsView({
           </div>
           <div className="text-[12px] text-muted">{total.toLocaleString()} 个岗位</div>
         </div>
+        <LocalJobSyncBanner onUpdated={refreshCatalog} />
         <div
           aria-label="岗位范围"
           className="mb-3 inline-flex w-fit rounded-lg border border-line bg-paper p-1"

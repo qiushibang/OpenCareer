@@ -2025,6 +2025,28 @@ export async function downloadCareerInterviewArtifact(
   URL.revokeObjectURL(url);
 }
 
+export interface LocalJobSyncStatus {
+  ok: boolean;
+  state: "waiting" | "running" | "partial" | "completed";
+  completed: number;
+  failed: number;
+  total_sources: number;
+  updated_at: number;
+  sources: { slug: string; name: string; status: string; checked_at: number }[];
+}
+
+export async function getLocalJobSync(): Promise<LocalJobSyncStatus> {
+  const res = await fetch(`${httpBase()}/v1/career/jobs/sync`);
+  if (!res.ok) throw new Error("无法读取岗位采集进度");
+  return res.json();
+}
+
+export async function refreshLocalJobs(): Promise<{ ok: boolean; queued: boolean }> {
+  const res = await fetch(`${httpBase()}/v1/career/jobs/sync`, { method: "POST" });
+  if (!res.ok) throw new Error("无法更新岗位");
+  return res.json();
+}
+
 export async function getCareerJobFilters(): Promise<
   CareerJobFiltersResult
 > {

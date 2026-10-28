@@ -5,6 +5,7 @@ import importlib
 import subprocess
 import sys
 import socket
+from argparse import Namespace
 
 import httpx
 import pytest
@@ -82,3 +83,33 @@ def test_local_launcher_refuses_an_occupied_port_without_stopping_its_owner(tmp_
         assert "already in use" in result.stderr
         assert not (tmp_path / "unused").exists()
         assert listener.fileno() >= 0
+
+
+@pytest.mark.parametrize("disabled", [False, True])
+def test_launcher_owns_and_stops_its_background_job_worker(tmp_path, monkeypatch, disabled):
+    import start_local
+    commands, stopped = [], []
+    class Child:
+        def __init__(self, command, **kwargs):
+            self.command = command
+            commands.append(command)
+        def poll(self):
+            return None
+    monkeypatch.setattr(start_local.shutil, "which", lambda _: "/fixture/node")
+    monkeypatch.setattr(start_local, "prepare_workspace", lambda *args: None)
+    monkeypatch.setattr(start_local.subprocess, "run", lambda *args, **kwargs: None)
+    monkeypatch.setattr(start_local.subprocess, "Popen", Child)
+    monkeypatch.setattr(start_local, "wait_ready", lambda *args: None)
+    monkeypatch.setattr(start_local, "stop_process", lambda child: stopped.append(child.command))
+    def interrupt(_seconds):
+        raise KeyboardInterrupt
+    monkeypatch.setattr(start_local.time, "sleep", interrupt)
+    args = Namespace(data_dir=tmp_path, port=1422, backend_port=8767, skip_install=True,
+                     no_browser=True, no_job_sync=disabled)
+    with pytest.raises(KeyboardInterrupt):
+        start_local.run_local(args)
+    workers = [c for c in commands if "extensions.career_mcp.local_jobs" in c]
+    assert len(workers) == (0 if disabled else 1)
+    assert len(stopped) == len(commands)
+    if workers:
+        assert stopped[0] == workers[0]

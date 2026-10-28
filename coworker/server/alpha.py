@@ -141,6 +141,8 @@ _PUBLIC_HTTP_ROUTES = (
     ("DELETE", r"/v1/sessions/[A-Za-z0-9_-]+"),
     ("POST", r"/v1/career/resumes/stage"),
     ("GET", r"/v1/career/(profile|resumes|interviews|jobs|jobs/filters)"),
+    ("GET", r"/v1/career/jobs/sync"),
+    ("POST", r"/v1/career/jobs/sync"),
     ("GET", r"/v1/career/profile/(versions|original(/(content|download))?)"),
     ("DELETE", r"/v1/career/profile"),
     ("GET", r"/v1/career/resumes/[A-Za-z0-9_-]+(/(versions|original(/(content|download))?))?"),
