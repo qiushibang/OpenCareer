@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from extensions.career_mcp.config import CareerConfig
 from extensions.career_mcp.services.job_catalog import JobCatalog
 from extensions.career_mcp.services.job_subscriptions import JobSubscriptions
@@ -85,3 +87,17 @@ def test_retry_resumes_only_failed_parts_across_channels_and_restart(tmp_path):
     assert restarted.tick() == 0
     assert restarted.runs(draft["id"])[0]["status"] == "sent"
     assert calls == ["feishu", "dingtalk", "dingtalk"]
+
+
+def test_activation_cannot_enable_a_version_changed_during_confirmation(tmp_path, monkeypatch):
+    service = JobSubscriptions(CareerConfig(tmp_path / "career"))
+    channel = service.save_channel("测试", "wecom", "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=fixture")
+    draft = service.draft({"title": "并发确认", "channel_ids": [channel["id"]]})
+    original = service.channels
+    def concurrent_edit():
+        service.pause(draft["id"])
+        return original()
+    monkeypatch.setattr(service, "channels", concurrent_edit)
+    with pytest.raises(ValueError, match="改变"):
+        service.activate(draft["id"], draft["version"])
+    assert service.list()[0]["enabled"] is False

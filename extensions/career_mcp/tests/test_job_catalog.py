@@ -124,6 +124,7 @@ def test_day_boundaries_are_applied_to_real_crawled_observation_times(tmp_path):
     CrawlerService(config).crawl(FakeAdapter("fixture", rows))
     service = JobCatalog(config, clock=lambda: datetime(2026,10,29,2,tzinfo=timezone.utc))
     assert [j["title"] for j in service.search(today=True)["jobs"]] == ["今日产品经理"]
+    assert [j["title"] for j in service.search({"field": "first_seen_at", "op": "between", "values": ["2026-10-29", "2026-10-30"]})["jobs"]] == ["今日产品经理"]
 
 
 def test_semantic_limit_never_reports_partial_matches_as_global_total(tmp_path):

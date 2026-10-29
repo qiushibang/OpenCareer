@@ -122,6 +122,7 @@ def validate_condition(condition: dict | None, depth: int = 0, count: list | Non
     if op == "between":
         if field not in DATES or len(values) != 2 or instant(values[0]) >= instant(values[1]):
             raise ValueError("时间区间应为 [开始, 结束)，开始必须早于结束。")
+        values = [instant(value).isoformat() for value in values]
     if field in {"job_family", "directions"}:
         allowed = FAMILIES if field == "job_family" else DIRECTIONS
         values = [next((k for k, label in LABELS.items() if label == v), v) for v in values]

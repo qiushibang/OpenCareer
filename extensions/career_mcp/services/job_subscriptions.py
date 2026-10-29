@@ -142,7 +142,9 @@ class JobSubscriptions:
             channels = {c["id"]: c for c in self.channels()}
             if any(c not in channels or channels[c]["version"] != data["channel_versions"][c] for c in data["channel_ids"]):
                 raise ValueError("渠道配置已改变，请重新确认。")
-            db.execute("UPDATE subscriptions SET enabled=1,next_run=? WHERE id=?", (next_fire(self.clock(), data["send_time"]), sid))
+            changed = db.execute("UPDATE subscriptions SET enabled=1,next_run=? WHERE id=? AND version=?", (next_fire(self.clock(), data["send_time"]), sid, version))
+            if changed.rowcount != 1:
+                raise ValueError("订阅已改变，请重新查看后启用。")
         return {"ok": True}
 
     def pause(self, sid: str) -> None:
