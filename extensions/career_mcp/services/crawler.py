@@ -256,6 +256,7 @@ class CrawlerService:
         )
 
     def list_sources(self) -> dict:
+        shared = self._shared_sources()
         with self._repository_session() as repository:
             persisted = {
                 source["slug"]: source
@@ -278,7 +279,39 @@ class CrawlerService:
             for source in persisted.values():
                 source["configured"] = False
                 sources.append(source)
+            listed = {source["slug"] for source in sources}
+            for slug, metadata in shared.items():
+                if slug not in listed:
+                    sources.append({"slug": slug, "name": metadata["source_name"], "enabled": True,
+                                    "missing_threshold": None, "configured": True})
+            for source in sources:
+                if source["slug"] in shared:
+                    source.update(shared[source["slug"]])
+                    source["configured"] = True
             return {"sources": sorted(sources, key=lambda source: source["slug"])}
+
+    def _shared_sources(self) -> dict:
+        if self._injected_repository_session is not None:
+            return {}
+        try:
+            state = json.loads((self.config.data_dir / "local-job-sync.json").read_text(encoding="utf-8"))
+            if state.get("mode") != "shared":
+                return {}
+            result = {}
+            for source in state.get("sources", []):
+                if not isinstance(source, dict) or not isinstance(source.get("slug"), str):
+                    continue
+                checked = source.get("checked_at")
+                result[source["slug"]] = {
+                    "data_origin": "shared", "source_name": source.get("name", source["slug"]),
+                    "sync_status": "failed" if state.get("error_code") == "FEED_UNAVAILABLE" else source.get("status"),
+                    "synced_at": datetime.fromtimestamp(checked, timezone.utc).isoformat() if checked else None,
+                    "upstream_status": source.get("upstream_status", "unknown"),
+                    "upstream_last_success_at": source.get("last_success_at"),
+                }
+            return result
+        except (OSError, ValueError, TypeError, AttributeError, OverflowError):
+            return {}
 
     def list_recent_job_events(self, *, limit: int = 20) -> dict:
         if not 1 <= limit <= 100:
@@ -324,7 +357,27 @@ class CrawlerService:
         healthy = 0
         failed = 0
         pending = 0
-        for source_slug in self.adapters.source_slugs():
+        shared = self._shared_sources()
+        configured_slugs = sorted(set(self.adapters.source_slugs()) | set(shared))
+        for source_slug in configured_slugs:
+            if source_slug in shared:
+                metadata = shared[source_slug]
+                sync_status = metadata["sync_status"]
+                upstream = metadata["upstream_status"]
+                if sync_status == "succeeded" and upstream == "succeeded":
+                    healthy += 1
+                else:
+                    is_failed = sync_status == "failed" or upstream in {"failed", "degraded"}
+                    failed += is_failed
+                    pending += not is_failed
+                    source_items.append({
+                        "source_slug": source_slug, **metadata,
+                        "last_run_status": "failed" if is_failed else None,
+                        "last_run_at": None, "last_observed_count": None,
+                        "last_error": ("公共目录同步未完成，已保存的数据保持不变。" if sync_status == "failed"
+                                       else "上游最近采集尚未成功确认；同步目录保留此前可用数据。"),
+                    })
+                continue
             source = exceptions.get(source_slug)
             if source is not None:
                 source_items.append(source)
@@ -348,7 +401,7 @@ class CrawlerService:
                 )
                 pending += 1
         digest["sources"] = {
-            "configured": len(self.adapters.source_slugs()),
+            "configured": len(configured_slugs),
             "healthy": healthy,
             "failed": failed,
             "pending": pending,

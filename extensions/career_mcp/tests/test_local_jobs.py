@@ -1,5 +1,6 @@
 """Local distribution sync reuses the real catalog services, without network."""
 from pathlib import Path
+import pytest
 
 from extensions.career_mcp.config import CareerConfig
 from extensions.career_mcp.crawler.adapters import FakeAdapter
@@ -137,3 +138,56 @@ def test_default_local_registry_keeps_all_official_and_full_mainland_sources(tmp
     actual = {a.source_slug for a in [*sync.adapters, *sync.resumable_adapters]}
     assert actual == expected
     assert {"bytedance-mainland-social", "bytedance-mainland-campus", "deepseek-careers", "xiaomi-careers"} <= actual
+
+
+@pytest.mark.parametrize("mode,delay", [("shared", 86400), ("local", 43200)])
+def test_worker_automatically_repeats_at_the_configured_interval(tmp_path, monkeypatch, mode, delay):
+    import sys
+    from extensions.career_mcp import local_jobs
+    from extensions.career_mcp.services import public_catalog
+    monkeypatch.setenv("OPENCAR_LOCAL_MODE", "1")
+    monkeypatch.setenv("CAREER_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("OPENCAR_LOCAL_JOB_SOURCE", mode)
+    monkeypatch.setattr(sys, "argv", ["local_jobs"])
+    clock = [0]
+    calls = []
+    class Worker:
+        def __init__(self, *args, **kwargs): pass
+        def run(self):
+            calls.append(clock[0])
+            if len(calls) == 2:
+                raise KeyboardInterrupt
+            return {"failed": 0}
+        def run_cycle(self, **kwargs): return self.run()
+    monkeypatch.setattr(local_jobs, "LocalJobSync", Worker)
+    monkeypatch.setattr(public_catalog, "PublicCatalogSync", Worker)
+    monkeypatch.setattr(local_jobs.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(local_jobs.time, "sleep", lambda _seconds: clock.__setitem__(0, clock[0] + delay))
+    assert local_jobs.main() == 0
+    assert calls == [0, delay]
+
+
+def test_shared_feed_failure_preserves_data_and_retries_after_fifteen_minutes(tmp_path, monkeypatch):
+    import sys
+    from extensions.career_mcp import local_jobs
+    from extensions.career_mcp.services import public_catalog
+    marker = tmp_path / "career.sqlite3"
+    marker.write_bytes(b"existing test data")
+    monkeypatch.setenv("OPENCAR_LOCAL_MODE", "1")
+    monkeypatch.setenv("CAREER_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("OPENCAR_LOCAL_JOB_SOURCE", "shared")
+    monkeypatch.setattr(sys, "argv", ["local_jobs"])
+    clock, calls = [0], []
+    class Offline:
+        def __init__(self, *args, **kwargs): pass
+        def run(self):
+            calls.append(clock[0])
+            if len(calls) == 2: raise KeyboardInterrupt
+            raise OSError("untrusted network error")
+    monkeypatch.setattr(public_catalog, "PublicCatalogSync", Offline)
+    monkeypatch.setattr(local_jobs.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(local_jobs.time, "sleep", lambda _seconds: clock.__setitem__(0, clock[0] + 900))
+    assert local_jobs.main() == 0
+    assert calls == [0, 900]
+    assert marker.read_bytes() == b"existing test data"
+    assert read_status(CareerConfig(tmp_path))["error_code"] == "FEED_UNAVAILABLE"

@@ -1,4 +1,6 @@
-# OpenCareer 单域名入口：所有用户必须通过 Authing 会话。
+# OpenCareer 单域名入口：用户接口通过 Authing 会话。
+# 网页静态资源及 /public/jobs/v1/ 公共岗位快照可匿名只读下载；
+# 快照只由独立的只读白名单导出任务发布，不包含任何用户数据。
 
 (spa) {
 	root * /srv/web

@@ -21,7 +21,7 @@ it("shows progress, refreshes jobs after a source completes, and retries failure
   expect(screen.getByRole("status").textContent).toContain("1 个来源成功");
   await act(async () => { fireEvent.click(screen.getByRole("button", { name: "重试采集" })); });
   expect(api.refreshLocalJobs).toHaveBeenCalledTimes(1);
-  expect(screen.getByText("已请求更新，后台将开始采集。")).toBeTruthy();
+  expect(screen.getByText("已请求更新，后台将开始处理。")).toBeTruthy();
 });
 
 it("does not poll or offer local crawling on the hosted build", () => {
@@ -29,4 +29,15 @@ it("does not poll or offer local crawling on the hosted build", () => {
   render(<LocalJobSyncBanner onUpdated={vi.fn()} />);
   expect(api.getLocalJobSync).not.toHaveBeenCalled();
   expect(screen.queryByLabelText("官方岗位采集")).toBeNull();
+});
+
+it("distinguishes shared snapshots from the last upstream crawl result", async () => {
+  api.getLocalJobSync.mockResolvedValue({ ok: true, mode: "shared", state: "completed", completed: 1,
+    total_sources: 1, failed: 0, updated_at: Date.now() / 1000, published_at: "2026-10-29T00:00:00Z",
+    sources: [{ slug: "one", name: "测试来源", status: "succeeded", checked_at: 1, upstream_status: "failed" }] });
+  await act(async () => { render(<LocalJobSyncBanner onUpdated={vi.fn()} />); });
+  expect(screen.getByRole("status").textContent).toContain("公共岗位目录已同步");
+  expect(screen.getByText(/每 24 小时/)).toBeTruthy();
+  expect(screen.getByText(/服务器与本机仍保留/)).toBeTruthy();
+  expect(screen.getByRole("button", { name: "重试同步" })).toBeTruthy();
 });

@@ -75,7 +75,7 @@ class LocalJobSync:
         return self.crawler.crawl(_ReplayAdapter(adapter.descriptor, snapshots)).status == "succeeded"
 
     def _save(self, sources: list[dict], state: str) -> dict:
-        result = {"state": state, "sources": sources, "total_sources": len(sources),
+        result = {"state": state, "mode": "local", "sources": sources, "total_sources": len(sources),
                   "completed": sum(s["status"] == "succeeded" for s in sources),
                   "failed": sum(s["status"] == "failed" for s in sources),
                   "updated_at": self.clock()}
@@ -180,15 +180,42 @@ def main() -> int:
     config = CareerConfig.from_env()
     try:
         with worker_lock(config.data_dir / ".local-job-sync.lock"):
-            sync = LocalJobSync(config)
+            mode = os.environ.get("OPENCAR_LOCAL_JOB_SOURCE", "shared")
+            if mode not in {"shared", "local"}:
+                raise ValueError("unsupported local job source mode")
+            if mode == "shared":
+                from .services.public_catalog import DEFAULT_FEED_URL, PublicCatalogSync
+                sync = PublicCatalogSync(config, base_url=os.environ.get("OPENCAR_PUBLIC_JOB_FEED_URL", DEFAULT_FEED_URL))
+            else:
+                sync = LocalJobSync(config)
             while True:
                 marker = config.data_dir / REQUEST_FILE
                 force = marker.exists()
                 marker.unlink(missing_ok=True)
-                sync.run_cycle(force=force)
+                delay = 24 * 60 * 60 if mode == "shared" else INTERVAL
+                cycle_ok = False
+                try:
+                    if mode == "shared":
+                        outcome = sync.run()
+                        cycle_ok = not outcome["failed"]
+                        if not cycle_ok:
+                            delay = 15 * 60
+                    else:
+                        outcome = sync.run_cycle(force=force)
+                        cycle_ok = not outcome["failed"]
+                except Exception:
+                    state = read_status(config)
+                    if state.get("mode", mode) != mode:
+                        state = {"sources": [], "completed": 0, "failed": 0, "total_sources": 0}
+                    state.update({"state": "partial", "mode": mode, "error_code": "FEED_UNAVAILABLE" if mode == "shared" else "LOCAL_CRAWL_UNAVAILABLE",
+                                  "updated_at": time.time()})
+                    temporary = config.data_dir / "local-job-sync.tmp"
+                    temporary.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+                    temporary.replace(config.data_dir / STATUS_FILE)
+                    delay = 15 * 60
                 if args.once:
-                    return 0
-                deadline = time.monotonic() + INTERVAL
+                    return 0 if cycle_ok else 1
+                deadline = time.monotonic() + delay
                 while time.monotonic() < deadline and not marker.exists():
                     time.sleep(1)
     except KeyboardInterrupt:

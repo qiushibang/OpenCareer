@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh public OpenCareer catalog snapshots hourly
+
+[Timer]
+OnCalendar=*-*-* *:15:00
+RandomizedDelaySec=120
+Persistent=true
+Unit=opencareer-public-catalog.service
+
+[Install]
+WantedBy=timers.target

@@ -1841,7 +1841,13 @@ def create_app(
             return JSONResponse({"ok": False}, status_code=404)
         from extensions.career_mcp.config import CareerConfig
         from extensions.career_mcp.local_jobs import read_status
-        return {"ok": True, **read_status(CareerConfig.from_env())}
+        state = read_status(CareerConfig.from_env())
+        configured_mode = os.environ.get("OPENCAR_LOCAL_JOB_SOURCE", "shared")
+        if state.get("mode", configured_mode) != configured_mode:
+            state = {"state": "waiting", "sources": [], "completed": 0, "failed": 0,
+                     "total_sources": 0, "updated_at": 0}
+        state.setdefault("mode", configured_mode)
+        return {"ok": True, **state}
 
     @app.post("/v1/career/jobs/sync")
     def career_local_job_sync_post():

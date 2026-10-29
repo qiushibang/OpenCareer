@@ -43,7 +43,7 @@ def request(url: str, body: dict | None = None, headers: dict | None = None):
 
 @contextmanager
 def running(tmp_path: Path, port: int, backend_port: int, *, root: Path = ROOT,
-            install: bool = False, python: str = sys.executable):
+            install: bool = False, python: str = sys.executable, job_source: str = "shared"):
     log_path = tmp_path / "launcher.log"
     with log_path.open("w") as log:
         # Deliberately hostile inherited settings: launcher must isolate all of them.
@@ -53,6 +53,7 @@ def running(tmp_path: Path, port: int, backend_port: int, *, root: Path = ROOT,
         process = subprocess.Popen(
             [python, str(root / "start_local.py"), *([] if install else ["--skip-install"]), "--no-browser", "--no-job-sync",
              "--port", str(port), "--backend-port", str(backend_port),
+             "--job-source", job_source,
              "--data-dir", str(tmp_path / "data")], stdout=log, stderr=log, env=env,
         )
         try:

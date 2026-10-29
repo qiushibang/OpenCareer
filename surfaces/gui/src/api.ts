@@ -2027,12 +2027,15 @@ export async function downloadCareerInterviewArtifact(
 
 export interface LocalJobSyncStatus {
   ok: boolean;
+  mode?: "shared" | "local";
+  published_at?: string;
+  error_code?: string;
   state: "waiting" | "running" | "partial" | "completed";
   completed: number;
   failed: number;
   total_sources: number;
   updated_at: number;
-  sources: { slug: string; name: string; status: string; checked_at: number }[];
+  sources: { slug: string; name: string; status: string; checked_at: number; upstream_status?: string; last_success_at?: string | null }[];
 }
 
 export async function getLocalJobSync(): Promise<LocalJobSyncStatus> {

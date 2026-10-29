@@ -44,10 +44,11 @@ def local_environment(data: Path, port: int, backend_port: int) -> dict[str, str
     return env
 
 
-def install_dependencies(env: dict[str, str]) -> Path:
+def install_dependencies(env: dict[str, str], *, browser_sources: bool = False) -> Path:
     python = ROOT / ".venv-local" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     marker = ROOT / ".venv-local" / ".opencareer-dependencies"
-    fingerprint = hashlib.sha256((ROOT / "pyproject.toml").read_bytes() + b":local-browser-v1").hexdigest()
+    flavor = b":local-browser-v1" if browser_sources else b":local-shared-v1"
+    fingerprint = hashlib.sha256((ROOT / "pyproject.toml").read_bytes() + flavor).hexdigest()
     usable = python.exists() and subprocess.run(
         [str(python), "-m", "pip", "--version"], env=env,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -67,11 +68,12 @@ def install_dependencies(env: dict[str, str]) -> Path:
             ) from exc
         marker.unlink(missing_ok=True)
     if not marker.exists() or marker.read_text() != fingerprint:
-        subprocess.run([str(python), "-m", "pip", "install", "-e", f"{ROOT}[browser]"], env=env, check=True)
+        dependency = f"{ROOT}[browser]" if browser_sources else str(ROOT)
+        subprocess.run([str(python), "-m", "pip", "install", "-e", dependency], env=env, check=True)
         marker.write_text(fingerprint)
     # Browser-backed official sources use the existing optional browser extra.
     # A failed browser download must not prevent API-backed sources or the app.
-    browser_ready = subprocess.run(
+    browser_ready = not browser_sources or subprocess.run(
         [str(python), "-c", "from playwright.sync_api import sync_playwright; "
          "p = sync_playwright().start(); b = p.chromium.launch(headless=True); b.close(); p.stop()"],
         env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -154,7 +156,15 @@ def run_local(args: argparse.Namespace) -> int:
         raise RuntimeError("请先安装 Node.js 22 LTS，然后重新运行。")
     data = args.data_dir.expanduser().resolve()
     env = local_environment(data, args.port, args.backend_port)
-    python = Path(sys.executable) if args.skip_install else install_dependencies(env)
+    source_mode = getattr(args, "job_source", "shared")
+    env["OPENCAR_LOCAL_JOB_SOURCE"] = source_mode
+    if getattr(args, "job_feed_url", None):
+        from urllib.parse import urlsplit
+        feed = urlsplit(args.job_feed_url)
+        if feed.scheme != "https" or not feed.hostname or feed.username or feed.password or feed.query or feed.fragment or not feed.path.endswith("/"):
+            raise ValueError("共享岗位地址必须是不含凭据或查询参数的 HTTPS 目录，以 / 结尾。")
+        env["OPENCAR_PUBLIC_JOB_FEED_URL"] = args.job_feed_url
+    python = Path(sys.executable) if args.skip_install else install_dependencies(env, browser_sources=source_mode == "local")
     prepare_workspace(data, python)
     gui = ROOT / "surfaces" / "gui"
     vite = gui / "node_modules" / "vite" / "bin" / "vite.js"
@@ -182,7 +192,8 @@ def run_local(args: argparse.Namespace) -> int:
                 [str(python), "-m", "extensions.career_mcp.local_jobs"],
                 cwd=ROOT, env=env, start_new_session=os.name == "posix",
             )
-            print("岗位雷达正在后台采集官方岗位，可直接打开页面查看进度；无需模型密钥。", flush=True)
+            action = "同步服务器公共岗位目录" if source_mode == "shared" else "采集官方岗位"
+            print(f"岗位雷达正在后台{action}，可直接打开页面查看进度；无需模型密钥。", flush=True)
         print(f"\nOpenCareer 本地版已启动：{url}\n数据目录：{data}\n仅本机可访问。请在页面配置你自己的模型；Ctrl+C 停止，数据会保留。", flush=True)
         if not args.no_browser:
             webbrowser.open(url)
@@ -203,6 +214,8 @@ def main() -> int:
     parser.add_argument("--backend-port", type=int, default=8767)
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--no-job-sync", action="store_true", help="关闭本次后台岗位采集（离线使用或测试）")
+    parser.add_argument("--job-source", choices=("shared", "local"), default="shared", help="岗位来源：默认同步公共目录；local 在本机独立采集")
+    parser.add_argument("--job-feed-url", help="自托管公共目录的 HTTPS 地址，以 / 结尾；不接受账号、密码或查询参数")
     parser.add_argument("--skip-install", action="store_true", help="Use the current Python and installed Node dependencies (development/CI only)")
     args = parser.parse_args()
     if args.port == args.backend_port or not all(1024 <= p <= 65535 for p in (args.port, args.backend_port)):

@@ -60,6 +60,7 @@ Career 领域能力通过 `extensions/career_mcp` 与 OpenWorker 核心隔离。
 
 ## 运维手册
 
+- [`23_JOB_CATALOG_DISTRIBUTION.md`](23_JOB_CATALOG_DISTRIBUTION.md)：默认共享公共岗位快照、每日同步与可选独立采集。
 - [`22_LOCAL_QUICKSTART.md`](22_LOCAL_QUICKSTART.md)：源码本地网页版安装、数据备份与限制。
 - [`21_OPEN_SOURCE_RELEASE.md`](21_OPEN_SOURCE_RELEASE.md)：干净快照发布与本地版验收边界。
 
