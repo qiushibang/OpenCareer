@@ -7,6 +7,8 @@ fields, company details, or requirements.
 
 ## Tool Selection
 
+- For combined filters, business lines, function subcategories or explicit daily subscription intent, load `career-catalog-query` and use the new catalog schema/query tools. Keep `search_jobs` for legacy simple requests.
+
 - Use `get_job_radar_digest` for a daily summary or a complete rolling-window
   view of job events and source health.
 - Use `list_sources` for source inventory questions.

@@ -7,6 +7,42 @@ declare const __COWORKER_DEV_TOKEN__: string;
 // for its dynamically-chosen sidecar port) → Vite env → the 127.0.0.1:8765 dev default. This
 // keeps a single codebase: browser `npm run dev` hits 8765; the desktop shell hits its sidecar.
 export const isLocal = (): boolean => (import.meta as any).env?.MODE === "standalone";
+
+export type CatalogCondition = Record<string, unknown>;
+export interface CatalogQuery {
+  condition?: CatalogCondition; today?: boolean; include_inactive?: boolean;
+  semantic_query?: string | null; semantic_offset?: number; limit?: number; offset?: number;
+}
+export interface CatalogJob extends CareerJobSummary {
+  reopened_at?: string | null;
+  classification: { job_family: string; directions: string[]; business_lines: string[]; official_department: string | null; published_at: string | null };
+  match_evidence: { origin: string; field?: string; text: string }[];
+}
+export interface CatalogResult {
+  kind: string; result_id: string; jobs: CatalogJob[]; total: number | null; evaluated_matches: number;
+  candidate_total: number; limit: number; offset: number; has_more: boolean;
+  applied_condition: CatalogCondition; include_inactive: boolean; semantic_query: string | null;
+  semantic: { partial: boolean; evaluated: number; next_offset: number | null }; warnings: string[];
+  query?: CatalogQuery;
+}
+export interface CatalogSchema {
+  companies: {slug: string; name: string}[]; job_families: Record<string,string>; directions: Record<string,string>;
+  recruitment_types?: {value: string; count: number}[];
+}
+export interface JobChannel { id: string; name: string; kind: string; version: number }
+export interface JobSubscription { id: string; version: number; title: string; condition: CatalogCondition; channel_ids: string[]; send_time: string; enabled: boolean; next_run?: string; semantic_query?: string | null; today?: boolean; include_inactive?: boolean }
+export interface JobDigestRun { id: string; started_at: string; status: string; result: {jobs?: CatalogJob[]; total?: number; partial?: boolean; warning?: string; error?: string}; deliveries: {channel_id: string; part: number; status: string}[] }
+
+export async function careerCatalogRequest<T>(path: string, body?: unknown, method?: string): Promise<T> {
+  const response = await fetch(`${httpBase()}/v1/career/${path}`, {
+    method: method || (body === undefined ? "GET" : "POST"),
+    headers: { "Content-Type": "application/json" },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  const result = await response.json();
+  if (!response.ok || !result.ok) throw new Error(typeof result.error === "string" ? result.error : "岗位服务暂不可用。");
+  return result.data as T;
+}
 const alphaProxy = (): boolean => (import.meta as any).env?.MODE === "alpha" || isLocal();
 
 /** 云端 Alpha 模式（vite --mode alpha 构建）。此时同源代理 /_openworker，模型由后端

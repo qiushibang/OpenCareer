@@ -87,6 +87,7 @@ def test_workspace_career_skills_are_discoverable():
     loader = SkillLoader([root / ".coworker" / "skills"])
 
     assert loader.names() == [
+        "career-catalog-query",
         "career-interview-evaluation",
         "career-interview-prep",
         "career-jd-analysis",

@@ -106,8 +106,12 @@ def prepare_workspace(data: Path, python: Path) -> None:
     managed = data / "workspace" / ".coworker"
     managed.mkdir(exist_ok=True, mode=0o700)
     config = {"mcpServers": {"career": {"command": str(python), "args": ["-m", "extensions.career_mcp.server"], "enabled": True}}}
+    legacy_config = json.loads(json.dumps(config))
+    # The MCP manager otherwise runs relative imports from the user workspace;
+    # a reused development Python could then resolve an older editable checkout.
+    config["mcpServers"]["career"]["cwd"] = str(ROOT)
     config_path = managed / "mcp.json"
-    if config_path.exists() and json.loads(config_path.read_text()) != config:
+    if config_path.exists() and json.loads(config_path.read_text()) not in (config, legacy_config):
         raise RuntimeError("本地专用工作区的 MCP 配置已被修改。请备份并使用新的 --data-dir；不会覆盖已有配置。")
     config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
     for skill in (ROOT / ".coworker" / "skills").iterdir():

@@ -14,6 +14,24 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_generated_mcp_runs_this_checkout_and_only_migrates_exact_legacy_config(tmp_path):
+    import json
+    from start_local import prepare_workspace
+    prepare_workspace(tmp_path / "user", Path(sys.executable))
+    path = tmp_path / "user" / "workspace" / ".coworker" / "mcp.json"
+    config = json.loads(path.read_text())
+    server = config["mcpServers"]["career"]
+    assert Path(server["cwd"]).resolve() == ROOT
+    server.pop("cwd")
+    path.write_text(json.dumps(config))
+    prepare_workspace(tmp_path / "user", Path(sys.executable))
+    assert json.loads(path.read_text())["mcpServers"]["career"]["cwd"] == str(ROOT)
+    config["mcpServers"]["career"]["args"] = ["unapproved-command"]
+    path.write_text(json.dumps(config))
+    with pytest.raises(RuntimeError, match="MCP 配置已被修改"):
+        prepare_workspace(tmp_path / "user", Path(sys.executable))
+
+
 def test_local_model_clients_ignore_inherited_provider_endpoints(tmp_path, monkeypatch):
     from start_local import local_environment
     from coworker.providers.registry import build_provider_client

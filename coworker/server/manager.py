@@ -237,7 +237,7 @@ class SessionManager:
             else TaskStore(base / "automation.db")
         )
         self.scheduler = Scheduler(
-            self.task_store, self._run_scheduled_task, extra_tick=self.resume_due_wakes
+            self.task_store, self._run_scheduled_task, extra_tick=self._career_and_wake_tick
         )
         # Personas: registry + lifecycle state under this manager's data dir. Installed as the
         # process singleton so agents.get_agent resolves persona ids (incl. third-party) here.
@@ -3130,6 +3130,11 @@ class SessionManager:
         return resolve_from_reply(text, _resolve) is not None
 
     # -- self-wake resumption ---------------------------------------------------
+    async def _career_and_wake_tick(self) -> None:
+        await self.resume_due_wakes()
+        from extensions.career_mcp.subscription_runtime import schedule_tick
+        await schedule_tick(self)
+
     async def resume_due_wakes(self) -> int:
         """Resume sessions whose self-wakes are due (called each scheduler tick). A suspended
         agent (it called sleep_for / wake_on / wake_on_event and ended its turn) is re-invoked on

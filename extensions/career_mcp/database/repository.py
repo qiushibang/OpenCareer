@@ -511,6 +511,35 @@ class JobRepository:
             "requirements": json.loads(row["requirements_json"]),
         }
 
+    def catalog_records(self, prefilters: list[dict] | None = None) -> list[dict]:
+        """One consistent local snapshot for evidence-bearing domain queries."""
+        clauses, params = ["1=1"], []
+        for item in prefilters or []:
+            field, values, op = item["field"], item["values"], item["op"]
+            if field == "company" and op == "in":
+                values = [v.casefold() for v in values]
+                marks = ",".join("?" for _ in values)
+                clauses.append(f"(LOWER(c.slug) IN ({marks}) OR LOWER(c.name) IN ({marks}))")
+                params.extend(values + values)
+            elif field == "locations" and op == "in":
+                values = [part.casefold() for value in values for part in (value.removesuffix("市"), value.removesuffix("市") + "市")]
+                clauses.append("EXISTS (SELECT 1 FROM json_each(j.locations_json) l WHERE LOWER(l.value) IN (" + ",".join("?" for _ in values) + "))")
+                params.extend(values)
+            elif field in {"status", "recruitment_type"} and op == "in":
+                clauses.append(f"LOWER(j.{field}) IN (" + ",".join("?" for _ in values) + ")")
+                params.extend(v.casefold() for v in values)
+            elif field in {"first_seen_at", "last_seen_at"} and op == "between":
+                clauses.append(f"julianday(j.{field})>=julianday(?) AND julianday(j.{field})<julianday(?)")
+                params.extend(values)
+        rows = self.connection.execute("""SELECT j.*, c.slug AS company_slug, c.name AS company_name,
+            tracking.is_favorite AS tracking_is_favorite, tracking.application_status AS tracking_application_status,
+            tracking.version AS tracking_version, tracking.updated_at AS tracking_updated_at,
+            reopened.reopened_at
+            FROM jobs j JOIN companies c ON c.id=j.company_id LEFT JOIN job_tracking tracking ON tracking.job_id=j.id
+            LEFT JOIN (SELECT job_id,MAX(occurred_at) AS reopened_at FROM job_events WHERE event_type='reopened' GROUP BY job_id) reopened ON reopened.job_id=j.id
+            WHERE """ + " AND ".join(clauses), params).fetchall()
+        return [{**self._job_row(row), "reopened_at": row["reopened_at"]} for row in rows]
+
     def search_jobs(self, filters: JobSearchFilters) -> tuple[list[dict], int]:
         clauses = ["1 = 1"]
         params: list[object] = []

@@ -35,12 +35,12 @@ def read_status(config: CareerConfig) -> dict:
             "total_sources": 0, "updated_at": 0}
 
 
-def request_refresh(config: CareerConfig) -> bool:
+def request_refresh(config: CareerConfig, company_slugs: list[str] | None = None) -> bool:
     """Coalesce refresh clicks; the sole worker consumes the fixed local marker."""
     config.data_dir.mkdir(parents=True, exist_ok=True)
     try:
         with (config.data_dir / REQUEST_FILE).open("x", encoding="utf-8") as stream:
-            stream.write("refresh\n")
+            stream.write(json.dumps({"company_slugs": company_slugs}) if company_slugs else "refresh\n")
         return True
     except FileExistsError:
         return False
@@ -85,7 +85,7 @@ class LocalJobSync:
         temporary.replace(path)
         return result
 
-    def run_cycle(self, *, force: bool = False) -> dict:
+    def run_cycle(self, *, force: bool = False, company_slugs: list[str] | None = None) -> dict:
         force = force or not self.config.database_path.is_file()
         connection = connect(self.config.database_path)
         try:
@@ -103,6 +103,8 @@ class LocalJobSync:
             return rank, adapter.source_slug
         adapters = sorted(self.adapters, key=priority)
         adapters = [*adapters, *self.resumable_adapters]
+        if company_slugs:
+            adapters = [a for a in adapters if a.descriptor.company_slug in company_slugs]
         resumable_slugs = {a.source_slug for a in self.resumable_adapters}
         sources = []
         for adapter in adapters:
@@ -191,6 +193,15 @@ def main() -> int:
             while True:
                 marker = config.data_dir / REQUEST_FILE
                 force = marker.exists()
+                companies = None
+                if force:
+                    try:
+                        requested = json.loads(marker.read_text())
+                        value = requested.get("company_slugs")
+                        if isinstance(value, list) and all(isinstance(s, str) for s in value):
+                            companies = value
+                    except (ValueError, AttributeError, OSError):
+                        pass
                 marker.unlink(missing_ok=True)
                 delay = 24 * 60 * 60 if mode == "shared" else INTERVAL
                 cycle_ok = False
@@ -201,7 +212,7 @@ def main() -> int:
                         if not cycle_ok:
                             delay = 15 * 60
                     else:
-                        outcome = sync.run_cycle(force=force)
+                        outcome = sync.run_cycle(force=force, **({"company_slugs": companies} if companies else {}))
                         cycle_ok = not outcome["failed"]
                 except Exception:
                     state = read_status(config)

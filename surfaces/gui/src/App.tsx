@@ -256,6 +256,11 @@ export function App() {
   const [surface, setSurface] = useState<
     "session" | "jobs" | "profile" | "scheduled" | "integrations" | "audit" | "inbox" | "persona" | "settings"
   >("session");
+  useEffect(() => {
+    const openCatalog = () => setSurface("jobs");
+    window.addEventListener("opencareer:catalog-open", openCatalog);
+    return () => window.removeEventListener("opencareer:catalog-open", openCatalog);
+  }, []);
   const [interviewLaunchError, setInterviewLaunchError] = useState("");
   const [resumeCoachLaunchError, setResumeCoachLaunchError] =
     useState("");

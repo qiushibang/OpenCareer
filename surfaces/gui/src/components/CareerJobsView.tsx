@@ -6,6 +6,7 @@ import {
   getCareerJobFilters,
   getCareerJobs,
   updateCareerJobTracking,
+  careerCatalogRequest, isLocal, type CatalogQuery, type CatalogResult,
   type CareerApplicationStatus,
   type CareerJobDetail,
   type CareerJobFilters,
@@ -20,6 +21,8 @@ import {
 import type { ResumeCoachLaunchPayload } from "../careerResumeCoach";
 import { CareerResumeCoachLauncher } from "./CareerResumeCoachLauncher";
 import { LocalJobSyncBanner } from "./LocalJobSyncBanner";
+import { CatalogQueryForm, describeCondition } from "./CatalogQueryForm";
+import { JobSubscriptionsPanel } from "./JobSubscriptionsPanel";
 
 const PAGE_SIZE = 20;
 
@@ -64,6 +67,7 @@ const displayStatus = (value: string) => STATUS_NAMES[value] || value;
 
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -108,6 +112,21 @@ export function CareerJobsView({
   const [offset, setOffset] = useState(0);
   const [listRevision, setListRevision] = useState(0);
   const [catalogRevision, setCatalogRevision] = useState(0);
+  const [advanced, setAdvanced] = useState<CatalogQuery | null>(null);
+  const [advancedResult, setAdvancedResult] = useState<CatalogResult | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showSubscriptions, setShowSubscriptions] = useState(false);
+  const standalone = typeof isLocal === "function" && isLocal();
+  useEffect(() => {
+    const read = () => {
+      try {
+        const stored = sessionStorage.getItem("opencareer-catalog-query");
+        if (stored) { setAdvanced(JSON.parse(stored)); setOffset(0); sessionStorage.removeItem("opencareer-catalog-query"); }
+      } catch { /* Invalid browser state is ignored; no query is executed. */ }
+    };
+    read(); window.addEventListener("opencareer:catalog-open", read);
+    return () => window.removeEventListener("opencareer:catalog-open", read);
+  }, []);
   const refreshCatalog = useCallback(() => setCatalogRevision(value => value + 1), []);
   const previousList = useRef({ criteria: "", catalogRevision: 0 });
   const [jobs, setJobs] = useState<CareerJobSummary[]>([]);
@@ -149,13 +168,16 @@ export function CareerJobsView({
   useEffect(() => {
     let current = true;
     const criteria = JSON.stringify([query, companySlug, location, recruitmentType,
-      status, favoriteOnly, applicationStatus, offset]);
+      status, favoriteOnly, applicationStatus, offset, advanced]);
     const preserveSelection = previousList.current.criteria === criteria
       && previousList.current.catalogRevision !== catalogRevision;
     previousList.current = { criteria, catalogRevision };
     setLoading(true);
     setError("");
-    getCareerJobs({
+    const pending = advanced ? careerCatalogRequest<CatalogResult>("catalog/search", {...advanced, limit: PAGE_SIZE, offset}).then(r => {
+      if (current) setAdvancedResult(r);
+      return {ok: true, jobs:r.jobs, total:r.total ?? r.evaluated_matches, error:undefined};
+    }) : getCareerJobs({
       query,
       companySlug,
       location,
@@ -165,8 +187,8 @@ export function CareerJobsView({
       applicationStatus: applicationStatus || undefined,
       limit: PAGE_SIZE,
       offset,
-    })
-      .then((result) => {
+    });
+    pending.then((result) => {
         if (!current) return;
         if (!result.ok) {
           setError(result.error?.message || "无法读取岗位列表。");
@@ -183,8 +205,8 @@ export function CareerJobsView({
             : nextJobs[0]?.id || "",
         );
       })
-      .catch(() => {
-        if (current) setError("无法连接本地岗位服务。");
+      .catch((failure) => {
+        if (current) setError(failure instanceof Error ? failure.message : "无法连接本地岗位服务。");
       })
       .finally(() => {
         if (current) setLoading(false);
@@ -203,6 +225,7 @@ export function CareerJobsView({
     offset,
     listRevision,
     catalogRevision,
+    advanced,
   ]);
 
   useEffect(() => {
@@ -426,6 +449,15 @@ export function CareerJobsView({
           <div className="text-[12px] text-muted">{total.toLocaleString()} 个岗位</div>
         </div>
         <LocalJobSyncBanner onUpdated={refreshCatalog} />
+        {standalone && <div className="flex flex-wrap gap-3 items-center mb-3">
+          <button className="text-sm text-accent border border-line rounded-lg px-3 py-2" onClick={() => setShowAdvanced(v => !v)}>组合筛选</button>
+          <button className="text-sm text-accent border border-line rounded-lg px-3 py-2" onClick={() => setShowSubscriptions(true)}>岗位订阅</button>
+          {advanced && <><p className="text-xs text-muted flex-1">{describeCondition(advanced.condition || {all: []})}{advanced.today ? "；今天首次发现" : ""}</p><button className="text-xs text-accent" onClick={() => {setAdvanced(null);setAdvancedResult(null);setOffset(0);}}>清除组合条件</button></>}
+        </div>}
+        {showAdvanced && <CatalogQueryForm onSubmit={criteria => {setAdvanced(criteria);setOffset(0);setShowAdvanced(false);}} />}
+        {advancedResult?.semantic.partial && <p role="status" className="text-sm text-warnInk mb-2">仅评估了 {advancedResult.semantic.evaluated} 个候选，当前数量不是全库总数。{advancedResult.semantic.next_offset !== null && <button className="text-accent ml-2" onClick={() => {setAdvanced(p => ({...p,semantic_offset:advancedResult.semantic.next_offset!}));setOffset(0);}}>评估下一批候选</button>}</p>}
+        {advanced && advancedResult?.warnings.map(w => <p key={w} className="text-xs text-warnInk mb-1">{w}</p>)}
+        <fieldset className={advanced ? "hidden" : "contents"} disabled={!!advanced}>
         <div
           aria-label="岗位范围"
           className="mb-3 inline-flex w-fit rounded-lg border border-line bg-paper p-1"
@@ -557,7 +589,15 @@ export function CareerJobsView({
             </span>
           )}
         </div>
+        </fieldset>
       </header>
+      {showSubscriptions && <JobSubscriptionsPanel condition={advanced?.condition || {all: [
+        ...(companySlug ? [{field:"company",op:"in",values:[companySlug]}] : []),
+        ...(location ? [{field:"locations",op:"in",values:[location]}] : []),
+        ...(query ? [{field:"text",op:"contains",values:[query]}] : []),
+        ...(recruitmentType ? [{field:"recruitment_type",op:"in",values:[recruitmentType]}] : []),
+        ...(status ? [{field:"status",op:"in",values:[status]}] : []),
+      ]}} today={advanced?.today} includeInactive={advanced?.include_inactive ?? status !== "active"} semanticQuery={advanced?.semantic_query} onClose={() => setShowSubscriptions(false)} />}
 
       <div
         className="flex-1 min-h-0 overflow-y-auto grid grid-cols-1 lg:overflow-hidden lg:grid-cols-[minmax(300px,38%)_1fr]"

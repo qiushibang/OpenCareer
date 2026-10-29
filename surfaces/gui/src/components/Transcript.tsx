@@ -6,6 +6,7 @@ import { Markdown } from "./Markdown";
 import { ConnectorMessageCard } from "./ConnectorMessageCard";
 import { Icon } from "./Icon";
 import { openSupport } from "../supportFault";
+import { JobCatalogCards } from "./JobCatalogCards";
 
 // Long user pastes swallow the transcript (owner ask 2026-07-30): clamp past a generous
 // threshold with a more…/less… toggle. Normal typed messages never see the control; the
@@ -265,7 +266,7 @@ function TurnGroup({
   const stepsLabel = `${nSteps} 个步骤`;
 
   return (
-    <details className="stepgroup" open={open}>
+    <div><details className="stepgroup" open={open}>
       <summary
         className="stepgroup-head flex items-center gap-2 py-0.5 cursor-pointer select-none text-[12.5px] text-faint hover:text-muted"
         onClick={(e) => {
@@ -328,6 +329,8 @@ function TurnGroup({
         </div>
       )}
     </details>
+    {tools.filter(t => t.name.endsWith("search_job_catalog") && t.status !== "…").slice(-1).map((t,i) => <JobCatalogCards key={i} preview={t.preview} />)}
+    </div>
   );
 }
 

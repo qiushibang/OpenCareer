@@ -251,6 +251,8 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         try:
+            if alpha.enabled() and os.environ.get("OPENCAR_LOCAL_MODE") == "1":
+                manager.scheduler.start()  # local Career digests, without messaging gateways
             live = (
                 await manager.start_gateway() if not alpha.enabled() else []
             )  # start messaging listeners (if configured)
@@ -3577,6 +3579,8 @@ def create_app(
             )
             _deactivate_manager(manager_token)
 
+    from extensions.career_mcp.catalog_api import router as career_catalog_router
+    app.include_router(career_catalog_router())
     return app
 
 

@@ -1016,6 +1016,35 @@ class PostgresCatalogRepository:
             raise ValueError("clock must be timezone-aware")
         return value.astimezone(timezone.utc)
 
+    def catalog_records(self, prefilters: list[dict] | None = None) -> list[dict]:
+        """Keep the principal-scoped visible_jobs boundary for portable queries."""
+        clauses, params = ["TRUE"], []
+        for item in prefilters or []:
+            field, values, op = item["field"], item["values"], item["op"]
+            if field == "company" and op == "in":
+                values = [v.casefold() for v in values]
+                clauses.append("(LOWER(c.slug)=ANY(%s) OR LOWER(c.name)=ANY(%s))")
+                params.extend([values, values])
+            elif field == "locations" and op == "in":
+                values = [part.casefold() for value in values for part in (value.removesuffix("市"), value.removesuffix("市") + "市")]
+                clauses.append("EXISTS (SELECT 1 FROM unnest(j.locations) l(value) WHERE LOWER(l.value)=ANY(%s))")
+                params.append(values)
+            elif field in {"status", "recruitment_type"} and op == "in":
+                clauses.append(f"LOWER(j.{field})=ANY(%s)")
+                params.append([v.casefold() for v in values])
+            elif field in {"first_seen_at", "last_seen_at"} and op == "between":
+                clauses.append(f"j.{field}>=%s::timestamptz AND j.{field}<%s::timestamptz")
+                params.extend(values)
+        rows = self.connection.execute("""SELECT j.id,c.slug,c.name,j.title,j.location_raw,j.locations,
+            j.recruitment_type,j.status,j.description_raw,j.responsibilities,j.requirements,
+            j.canonical_url,j.first_seen_at,j.last_seen_at,j.last_changed_at,tracking.data,tracking.version,
+            reopened.reopened_at
+            FROM career.visible_jobs j JOIN catalog.companies c ON c.id=j.company_id
+            LEFT JOIN career.job_tracking tracking ON tracking.job_id=j.id AND tracking.user_id=current_setting('app.user_id', true)
+            LEFT JOIN (SELECT job_id,MAX(occurred_at) AS reopened_at FROM catalog.job_events WHERE event_type='reopened' GROUP BY job_id) reopened ON reopened.job_id=j.id
+            WHERE """ + " AND ".join(clauses), params).fetchall()
+        return [{**self._job_row(row), "reopened_at": str(row[17]) if row[17] else None} for row in rows]
+
     def search_jobs(
         self,
         filters: JobSearchFilters,
