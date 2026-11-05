@@ -70,6 +70,35 @@ def _payload() -> dict:
     return json.loads((FIXTURE_DIR / "listing_page_1.json").read_text())
 
 
+@pytest.mark.parametrize("errors,expected_first,raises", [
+    ([TimeoutError(), None], [False, True], None),
+    ([TimeoutError(), TimeoutError()], [False, True], TimeoutError),
+    ([ValueError("malformed")], [False], ValueError),
+])
+def test_mainland_page_retries_only_one_timeout(monkeypatch, errors, expected_first, raises):
+    navigations, matchers = [], []
+    class ResponseContext:
+        value = SimpleNamespace(json=lambda: {"data": {"count": 10}})
+        def __enter__(self): return self
+        def __exit__(self, *args):
+            error = errors.pop(0)
+            if error is not None: raise error
+    class Page:
+        def expect_response(self, matcher, **kwargs):
+            matchers.append((matcher, kwargs))
+            return ResponseContext()
+    monkeypatch.setattr(bytedance, "_navigate_mainland_page",
+                        lambda *args, first: navigations.append(first))
+    call = lambda: bytedance._read_mainland_page(
+        Page(), BYTEDANCE_MAINLAND_SOCIAL, {}, 20, first=False, timeout_error=TimeoutError)
+    if raises:
+        with pytest.raises(raises): call()
+    else:
+        assert call() == {"data": {"count": 10}}
+    assert navigations == expected_first
+    assert all(kwargs["timeout"] == 20_000 for _, kwargs in matchers)
+
+
 def test_parse_fixture_maps_seed_jobs_with_complete_jd():
     metadata = json.loads((FIXTURE_DIR / "metadata.json").read_text())
 

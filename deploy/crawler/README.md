@@ -143,3 +143,5 @@ docker compose run --rm crawler once --from-cache
 进程重启也先查已有进度；完成后回到每日计划。`CRAWL_RESUME_SECONDS` 至少 10 秒，
 `CRAWL_RESUMABLE_BATCHES` 默认 12（每批最多 5 页）。小批次及时保存检查点，减少单次网络失败回滚的页数。未通过完整性核验的分页只进入
 暂存区，不更新公共岗位状态。公共静态目录另由 `deploy/public-catalog/` 的导出任务发布。
+
+字节公开页面偶发 20 秒响应超时会通过同一公开地址重试一次；第二次仍超时即保留检查点并失败。响应内容校验或完整性失败不会通过重试绕过。

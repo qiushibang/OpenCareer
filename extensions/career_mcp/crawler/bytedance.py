@@ -844,7 +844,7 @@ def _fetch_mainland_pages_sync(
             "ByteDance browser batch limit must be between 1 and 100"
         )
     try:
-        from playwright.sync_api import sync_playwright
+        from playwright.sync_api import TimeoutError as BrowserTimeoutError, sync_playwright
     except ImportError as exc:
         raise ByteDanceAccessRestricted(
             "Playwright is unavailable; install the OpenWorker browser extra"
@@ -870,19 +870,10 @@ def _fetch_mainland_pages_sync(
                 page.route("**/*", block_heavy)
                 for index in range(limit):
                     current_offset = offset + index * 10
-                    with page.expect_response(
-                        lambda response, expected=current_offset: (
-                            _mainland_response_matches(
-                                response,
-                                scope,
-                                filters,
-                                expected,
-                            )
-                        ),
-                        timeout=20_000,
-                    ) as response_info:
-                        _navigate_mainland_page(page, scope, filters, current_offset, first=index == 0)
-                    payload = response_info.value.json()
+                    payload = _read_mainland_page(
+                        page, scope, filters, current_offset,
+                        first=index == 0, timeout_error=BrowserTimeoutError,
+                    )
                     if not isinstance(payload, dict):
                         raise ByteDanceAccessRestricted(
                             "ByteDance response JSON must be an object"
@@ -905,6 +896,27 @@ def _fetch_mainland_pages_sync(
             "ByteDance public page batch did not complete"
         ) from exc
     return payloads
+
+
+def _read_mainland_page(page, scope: ByteDanceMainlandScope,
+                        filters: Mapping[str, object], offset: int, *,
+                        first: bool, timeout_error: type[Exception]) -> object:
+    # A transient missing response must not repeatedly abandon the whole batch.
+    # Retry once using the same public URL and exact response matcher. Do not
+    # retry malformed payloads, permission errors or completeness failures.
+    for attempt in range(2):
+        try:
+            with page.expect_response(
+                lambda response: _mainland_response_matches(response, scope, filters, offset),
+                timeout=20_000,
+            ) as response_info:
+                _navigate_mainland_page(page, scope, filters, offset,
+                                       first=first or attempt > 0)
+            return response_info.value.json()
+        except timeout_error:
+            if attempt:
+                raise
+    raise AssertionError("unreachable")
 
 
 def _fetch_mainland_browser_response(
