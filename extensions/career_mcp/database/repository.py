@@ -26,6 +26,16 @@ class JobRepository:
         row = self.connection.execute("SELECT * FROM crawl_cycles WHERE source_id=? AND status='running'", (crawl_source_id,)).fetchone()
         return dict(row) if row else None
 
+    def get_latest_crawl_cycle(self, crawl_source_id: str) -> dict | None:
+        row = self.connection.execute("SELECT * FROM crawl_cycles WHERE source_id=? ORDER BY started_at DESC LIMIT 1", (crawl_source_id,)).fetchone()
+        return dict(row) if row else None
+
+    def resume_bounded_tail(self, cycle_id: str) -> bool:
+        return self.connection.execute(
+            "UPDATE crawl_cycles SET status='running',completed_at=NULL,updated_at=? WHERE id=? AND status='degraded' AND pass_number=3 AND error_summary=?",
+            (utc_now_iso(), cycle_id, "ByteDance listing did not converge after three passes"),
+        ).rowcount == 1
+
     def get_or_create_crawl_cycle(
         self,
         crawl_source_id: str,

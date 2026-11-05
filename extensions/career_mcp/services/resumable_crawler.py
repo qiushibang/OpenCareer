@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import asdict
+from datetime import datetime, timedelta
 from typing import Iterator
 
 from ..config import CareerConfig
@@ -30,6 +31,8 @@ class _ReplayAdapter:
 
 
 class ResumableCrawlerService:
+    tail_limit = 40
+    tail_batch_size = 5
     def __init__(
         self,
         config: CareerConfig | None = None,
@@ -57,6 +60,8 @@ class ResumableCrawlerService:
                     "processed_pages": 0,
                 }
             running = getattr(repository, "get_running_crawl_cycle", lambda _: None)(str(source["crawl_source_id"]))
+            if running is None and callable(getattr(adapter, "verify_stale_jobs", None)):
+                running = self._resume_recent_tail(repository, str(source["crawl_source_id"]))
             # Between daily refreshes, resume checkpoints without starting a new
             # cycle for sources which have already finished.
             if continuation_only and running is None:
@@ -279,7 +284,7 @@ class ResumableCrawlerService:
                     )
                     if (
                         not stale_rows
-                        or len(stale_rows) > 20
+                        or len(stale_rows) > self.tail_limit
                         or not callable(verifier)
                     ):
                         error_summary = (
@@ -304,32 +309,12 @@ class ResumableCrawlerService:
                         }
                     stale_snapshots = [
                         JobSnapshot(**row["snapshot"])
-                        for row in stale_rows
+                        for row in stale_rows[:self.tail_batch_size]
                     ]
-                    try:
-                        detail_statuses = verifier(
-                            stale_snapshots
-                        )
-                    except Exception:
-                        error_summary = (
-                            "ByteDance stale detail verification failed"
-                        )
-                        repository.complete_cycle(
-                            cycle["id"],
-                            status="degraded",
-                            error_summary=error_summary,
-                        )
-                        return {
-                            "source_slug": adapter.source_slug,
-                            "cycle_id": cycle["id"],
-                            "status": "degraded",
-                            "processed_pages": processed_pages,
-                            "observed_unique": observed_unique,
-                            "has_more": False,
-                            "pass_number": pass_number,
-                            "transitions": {},
-                            "error_summary": error_summary,
-                        }
+                    # Transport failures retain the running checkpoint for the
+                    # normal retry loop. Unknown or inconsistent results below
+                    # still fail closed and can never publish a catalog.
+                    detail_statuses = verifier(stale_snapshots)
                     stale_ids = {
                         snapshot.external_job_id
                         for snapshot in stale_snapshots
@@ -388,10 +373,12 @@ class ResumableCrawlerService:
                         int(row["last_pass"]) == pass_number
                         for row in cycle_jobs
                     ):
-                        raise RuntimeError(
-                            "ByteDance stale tail reconciliation "
-                            "did not converge"
-                        )
+                        return {"source_slug": adapter.source_slug, "cycle_id": cycle["id"],
+                                "status": "running", "processed_pages": processed_pages,
+                                "observed_unique": observed_unique, "has_more": True,
+                                "pass_number": pass_number, "tail_verification": tail_verification,
+                                "tail_verification_scope": "batch",
+                                "tail_remaining": sum(int(row["last_pass"]) < pass_number for row in cycle_jobs)}
                     converged = True
                 next_pass = pass_number + 1
                 if not converged:
@@ -440,11 +427,43 @@ class ResumableCrawlerService:
             "transitions": result.transitions,
             "error_summary": result.error_summary,
             **(
-                {"tail_verification": tail_verification}
+                {"tail_verification": tail_verification, "tail_verification_scope": "batch", "tail_remaining": 0}
                 if tail_verification is not None
                 else {}
             ),
         }
+
+    def _resume_recent_tail(self, repository, source_id: str) -> dict | None:
+        """Re-evaluate only a recent cycle stopped by the old tail budget.
+
+        This reopens staging, never commits it. Every remaining row must still
+        pass official detail verification. Old or otherwise invalid cycles are
+        excluded so archived observations cannot become a fresh publication.
+        """
+        getter = getattr(repository, "get_latest_crawl_cycle", None)
+        if not callable(getter):
+            return None
+        cycle = getter(source_id)
+        if (not cycle or cycle["status"] != "degraded" or int(cycle["pass_number"]) != 3
+                or cycle["error_summary"] != "ByteDance listing did not converge after three passes"):
+            return None
+        shards = repository.list_cycle_shards(cycle["id"])
+        rows = repository.list_cycle_jobs(cycle["id"])
+        stale = [row for row in rows if int(row["last_pass"]) < 3]
+        verified = [row for row in rows if int(row["last_pass"]) == 3]
+        if not shards or any(row["status"] != "complete" for row in shards) or not verified or not 1 <= len(stale) <= self.tail_limit:
+            return None
+        cutoff = datetime.fromisoformat(utc_now_iso().replace("Z", "+00:00")) - timedelta(hours=24)
+        try:
+            for row in verified:
+                stamp = datetime.fromisoformat(row["snapshot"]["observed_at"].replace("Z", "+00:00"))
+                if stamp.tzinfo is None or not cutoff <= stamp <= cutoff + timedelta(hours=24):
+                    return None
+        except (KeyError, TypeError, ValueError):
+            return None
+        if not repository.resume_bounded_tail(cycle["id"]):
+            return None
+        return repository.get_running_crawl_cycle(source_id)
 
     @contextmanager
     def _repository_session(self) -> Iterator[object]:

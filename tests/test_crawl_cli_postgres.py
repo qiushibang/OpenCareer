@@ -412,3 +412,22 @@ exit 0
     waits = sleeps.read_text().splitlines()
     assert waits[:2] == ["sleep 60", "sleep 60"]
     assert int(waits[2].split()[1]) > 60  # completed: return to daily schedule
+
+
+def test_postgres_tail_resume_is_limited_to_expected_failure_state():
+    from types import SimpleNamespace
+    from extensions.career_mcp.database.postgres_catalog_repository import PostgresCatalogRepository
+    calls = []
+    class Connection:
+        changed = 1
+        def execute(self, sql, args):
+            calls.append((sql, args))
+            return SimpleNamespace(rowcount=self.changed)
+    db = Connection()
+    repository = PostgresCatalogRepository(db)
+    assert repository.resume_bounded_tail('cycle-1') is True
+    sql, args = calls[-1]
+    assert "status='degraded'" in sql and 'pass_number=3' in sql and 'error_summary=%s' in sql
+    assert args[-2:] == ('cycle-1', 'ByteDance listing did not converge after three passes')
+    db.changed = 0
+    assert repository.resume_bounded_tail('cycle-1') is False

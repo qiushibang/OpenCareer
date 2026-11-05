@@ -55,6 +55,18 @@ class PostgresCatalogRepository:
         ).fetchone()
         return _cycle_row(row) if row is not None else None
 
+    def get_latest_crawl_cycle(self, crawl_source_id: str) -> dict | None:
+        row = self.connection.execute("""SELECT id,source_id,status,pass_number,expected_total,
+            started_at,updated_at,completed_at,error_summary FROM catalog.crawl_cycles
+            WHERE source_id=%s ORDER BY started_at DESC LIMIT 1""", (crawl_source_id,)).fetchone()
+        return _cycle_row(row) if row is not None else None
+
+    def resume_bounded_tail(self, cycle_id: str) -> bool:
+        return self.connection.execute("""UPDATE catalog.crawl_cycles SET status='running',
+            completed_at=NULL,updated_at=%s WHERE id=%s AND status='degraded'
+            AND pass_number=3 AND error_summary=%s""", (self._now(), cycle_id,
+            "ByteDance listing did not converge after three passes")).rowcount == 1
+
     def get_or_create_crawl_cycle(
         self,
         crawl_source_id: str,

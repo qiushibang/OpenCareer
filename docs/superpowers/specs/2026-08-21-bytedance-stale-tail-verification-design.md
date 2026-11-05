@@ -12,7 +12,7 @@
 ## 触发边界
 
 - 仅在所有分片完成、`pass_number >= 3` 且常规覆盖检查未收敛时触发。
-- stale 岗位数量必须在 `1..20`；超过 20 条继续标记 `degraded`。
+- 整轮 stale 岗位数量必须在 `1..40`；超过 40 条继续标记 `degraded`。每次最多核验 5 条，逐批保存已确定的结果。
 - Adapter 必须显式实现 `verify_stale_jobs()`；其他 resumable Adapter 保持原行为。
 - 已收敛 cycle 不访问详情页。
 
@@ -33,8 +33,9 @@ https://jobs.bytedance.com/campus/position/<id>/detail
 - `active`：正文同时包含 `职位描述` 和 `职位要求`，且不含下线文案。
 - `unknown`：其余页面，包括登录、验证码、空白、错误页和未完成渲染。
 
-任一岗位为 `unknown`、访问超时或发生非官方重定向时，整次尾部核验失败关闭，不修改
-staging，不提交 Catalog。
+任一岗位为 `unknown` 或返回不一致结果时，当批不修改 staging，整轮失败关闭，不提交 Catalog。传输异常同样不提交 Catalog，但保留已完成批次与运行中检查点，交由既有失败退避重试。先前已确定的批次不回滚。
+
+2026-11-05 实采发现 24 条尾部记录超过旧的 20 条预算。仅允许安全恢复这种预算失败：最新周期必须停在第三轮、全部分类已完成、尾部不超过 40 条，且本轮已确认记录均在最近 24 小时内。其他错误、旧周期、未完成分类或未知时间不恢复；恢复只进入 staging，剩余记录全部取得确定结果后才可提交。
 
 ## Staging 对账
 
@@ -56,11 +57,13 @@ Repository 新增一个原子方法，输入 active/offline ID 集合、当前 p
   "tail_verification": {
     "active": 2,
     "offline": 4
-  }
+  },
+  "tail_verification_scope": "batch",
+  "tail_remaining": 0
 }
 ```
 
-失败结果保持 `status=degraded`、`transitions={}`，错误摘要只说明核验类别和数量，
+`tail_verification` 是当批计数；未结束时返回 `status=running`、`has_more=true`，只有 `tail_remaining=0` 且完整性检查通过才提交。数据判定失败保持 `status=degraded`、`transitions={}`；传输异常由调用方记录失败并退避。错误摘要只说明核验类别和数量，
 不记录 Cookie、请求头或页面内容。
 
 ## 测试

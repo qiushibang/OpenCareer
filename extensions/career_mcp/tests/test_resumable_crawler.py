@@ -415,7 +415,7 @@ def test_resumable_crawler_reconciles_six_stale_jobs_from_details(
             self.verified.append(
                 [snapshot.external_job_id for snapshot in snapshots]
             )
-            return {
+            statuses = {
                 "active-1": "active",
                 "active-2": "active",
                 "off-1": "offline",
@@ -423,6 +423,7 @@ def test_resumable_crawler_reconciles_six_stale_jobs_from_details(
                 "off-3": "offline",
                 "off-4": "offline",
             }
+            return {snapshot.external_job_id: statuses[snapshot.external_job_id] for snapshot in snapshots}
 
     adapter = TailAdapter()
     config = CareerConfig(data_dir=tmp_path / "career")
@@ -432,12 +433,16 @@ def test_resumable_crawler_reconciles_six_stale_jobs_from_details(
     assert service.run_batch(adapter)["pass_number"] == 3
     result = service.run_batch(adapter)
 
+    assert result["status"] == "running" and result["tail_remaining"] == 1
+    first = result["tail_verification"]
+    result = service.run_batch(adapter)
     assert result["status"] == "committed"
-    assert result["tail_verification"] == {
+    assert {key: first[key] + result["tail_verification"][key] for key in first} == {
         "active": 2,
         "offline": 4,
     }
-    assert adapter.verified == [stale_ids]
+    assert sorted(job_id for batch in adapter.verified for job_id in batch) == sorted(stale_ids)
+    assert all(len(batch) <= 5 for batch in adapter.verified)
     with connect(config.database_path) as connection:
         rows = connection.execute(
             "SELECT external_job_id FROM jobs ORDER BY external_job_id"
@@ -500,7 +505,7 @@ def test_resumable_crawler_degrades_unknown_stale_detail(tmp_path):
 
 
 def test_resumable_crawler_does_not_verify_large_stale_tail(tmp_path):
-    stale_ids = [str(index) for index in range(21)]
+    stale_ids = [str(index) for index in range(41)]
 
     class LargeTailAdapter(_Adapter):
         def __init__(self):
@@ -511,8 +516,8 @@ def test_resumable_crawler_does_not_verify_large_stale_tail(tmp_path):
                         _job(job_id)
                         for job_id in [*stale_ids, "current"]
                     ],
-                    total=22,
-                    next_offset=22,
+                    total=42,
+                    next_offset=42,
                     complete=True,
                     fingerprint="pass-1",
                 ),
@@ -669,3 +674,90 @@ def test_resumable_crawler_allows_count_drift_in_first_pass(
     assert result["status"] == "running"
     assert result["pass_number"] == 2
     assert result["observed_unique"] == 3
+
+
+def _recent_legacy_tail(tmp_path, monkeypatch):
+    from extensions.career_mcp.services import resumable_crawler as module
+    monkeypatch.setattr(module, 'utc_now_iso', lambda: '2026-08-20T01:00:00Z')
+    class Adapter(_Adapter):
+        def __init__(self):
+            super().__init__({})
+            self.responses = [ResumableListingPage(
+                jobs=[_job(str(i)) for i in range(25)], total=25,
+                next_offset=25, complete=True, fingerprint='first')]
+            self.responses += [ResumableListingPage(jobs=[_job('24')], total=1,
+                next_offset=1, complete=True, fingerprint=f'pass-{i}') for i in (2, 3)]
+            self.details = []
+        def fetch_page(self, filters, offset):
+            return self.responses.pop(0)
+        def verify_stale_jobs(self, snapshots):
+            self.details.append(len(snapshots))
+            return {snapshot.external_job_id: 'active' for snapshot in snapshots}
+    adapter = Adapter()
+    config = CareerConfig(tmp_path)
+    legacy = ResumableCrawlerService(config)
+    legacy.tail_limit = 20
+    legacy.run_batch(adapter)
+    legacy.run_batch(adapter)
+    result = legacy.run_batch(adapter)
+    assert result['status'] == 'degraded'
+    return adapter, config, result['cycle_id']
+
+
+def test_recent_legacy_tail_resumes_in_bounded_batches_without_publishing_partial(tmp_path, monkeypatch):
+    adapter, config, cycle_id = _recent_legacy_tail(tmp_path, monkeypatch)
+    service = ResumableCrawlerService(config)
+    results = []
+    for _ in range(5):
+        result = service.run_batch(adapter, continuation_only=True)
+        results.append(result)
+        assert result['cycle_id'] == cycle_id
+        if result['has_more']:
+            with connect(config.database_path) as db:
+                assert db.execute('SELECT count(*) FROM jobs').fetchone()[0] == 0
+    assert results[-1]['status'] == 'committed'
+    assert adapter.details == [5, 5, 5, 5, 4]
+    assert [r['tail_remaining'] for r in results] == [19, 14, 9, 4, 0]
+
+
+def test_archived_tail_and_other_validation_failures_are_not_reopened(tmp_path, monkeypatch):
+    from extensions.career_mcp.services import resumable_crawler as module
+    adapter, config, cycle_id = _recent_legacy_tail(tmp_path, monkeypatch)
+    service = ResumableCrawlerService(config)
+    monkeypatch.setattr(module, 'utc_now_iso', lambda: '2026-08-22T01:00:00Z')
+    assert service.run_batch(adapter, continuation_only=True)['status'] == 'idle'
+    monkeypatch.setattr(module, 'utc_now_iso', lambda: '2026-08-20T01:00:00Z')
+    with connect(config.database_path) as db:
+        db.execute('UPDATE crawl_cycles SET error_summary=? WHERE id=?',
+                   ('ByteDance stale detail verification returned unknown results', cycle_id))
+        db.commit()
+    assert service.run_batch(adapter, continuation_only=True)['status'] == 'idle'
+    assert adapter.details == []
+
+
+def test_tail_transport_failure_preserves_running_cycle_for_retry(tmp_path):
+    import pytest
+    class Adapter(_Adapter):
+        def __init__(self):
+            super().__init__({})
+            self.responses = [ResumableListingPage(jobs=[_job('old'), _job('current')],
+                total=2, next_offset=2, complete=True, fingerprint='first')]
+            self.responses += [ResumableListingPage(jobs=[_job('current')], total=1,
+                next_offset=1, complete=True, fingerprint='next') for _ in range(3)]
+            self.calls = 0
+        def fetch_page(self, filters, offset): return self.responses.pop(0)
+        def verify_stale_jobs(self, snapshots):
+            self.calls += 1
+            if self.calls == 1: raise TimeoutError('transport unavailable')
+            return {snapshot.external_job_id: 'active' for snapshot in snapshots}
+    adapter = Adapter()
+    config = CareerConfig(tmp_path)
+    service = ResumableCrawlerService(config)
+    service.run_batch(adapter)
+    second = service.run_batch(adapter)
+    with pytest.raises(TimeoutError): service.run_batch(adapter)
+    with connect(config.database_path) as db:
+        assert db.execute('SELECT status FROM crawl_cycles').fetchone()[0] == 'running'
+        assert db.execute('SELECT count(*) FROM jobs').fetchone()[0] == 0
+    result = service.run_batch(adapter)
+    assert result['status'] == 'committed' and result['cycle_id'] == second['cycle_id']
