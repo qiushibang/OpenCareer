@@ -8,12 +8,15 @@ export function CareerQueryActions({tools}:{tools:Tool[]}) {
   const [error,setError]=useState("");
   if(!isLocal())return null;
   const search=[...tools].reverse().find(t=>t.name.endsWith("search_job_catalog")&&!["error","failed","running","pending"].includes(t.status)&&!(/"ok"\s*:\s*false/.test(t.preview||"")));
-  const subscription=[...tools].reverse().find(t=>(t.name.endsWith("draft_job_subscription")||t.name.endsWith("list_job_subscriptions"))&&!["error","failed","running","pending"].includes(t.status)&&!(/"ok"\s*:\s*false/.test(t.preview||"")));
+  const draft=[...tools].reverse().find(t=>t.name.endsWith("draft_job_subscription")&&!["error","failed","running","pending"].includes(t.status)&&!(/"ok"\s*:\s*false/.test(t.preview||"")));
+  const subscription=draft||[...tools].reverse().find(t=>t.name.endsWith("list_job_subscriptions")&&!["error","failed","running","pending"].includes(t.status)&&!(/"ok"\s*:\s*false/.test(t.preview||"")));
   if(!search&&!subscription)return null;
   const args=(tool?:Tool)=>{try{const raw=typeof tool?.args==="string"?JSON.parse(tool.args):tool?.args;return raw&&typeof raw==="object"?raw:{};}catch{return {};}};
   const open=(subscribe:boolean)=>{
     try{
-      const raw=args(subscribe&&subscription?.name.endsWith("draft_job_subscription")?subscription:search);
+      // A draft states the user's complete intent. Later channel-list calls or
+      // narrower example searches must not silently replace it in either link.
+      const raw=args(draft||search);
       const query=Object.fromEntries(KEYS.filter(key=>raw[key]!==undefined).map(key=>[key,raw[key]])) as CatalogQuery;
       if(JSON.stringify(query).length>20000)throw new Error("筛选条件过长，请缩小范围后重试。");
       sessionStorage.setItem("opencareer-catalog-query",JSON.stringify(query));
