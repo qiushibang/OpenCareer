@@ -58,6 +58,7 @@ def test_mainland_batch_uses_normal_next_page_control_without_full_reload():
             actions.append(selector)
             return Locator()
         def goto(self, *args, **kwargs):
+            assert kwargs["wait_until"] == "commit"
             actions.append("goto")
     bytedance._navigate_mainland_page(Page(), BYTEDANCE_MAINLAND_CAMPUS, {}, 10, first=False)
     assert "click" in actions and "goto" not in actions
@@ -96,7 +97,7 @@ def test_mainland_page_retries_only_one_timeout(monkeypatch, errors, expected_fi
     else:
         assert call() == {"data": {"count": 10}}
     assert navigations == expected_first
-    assert all(kwargs["timeout"] == 20_000 for _, kwargs in matchers)
+    assert all(kwargs["timeout"] == 45_000 for _, kwargs in matchers)
 
 
 def test_parse_fixture_maps_seed_jobs_with_complete_jd():

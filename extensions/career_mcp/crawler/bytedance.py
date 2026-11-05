@@ -830,7 +830,9 @@ def _navigate_mainland_page(page, scope: ByteDanceMainlandScope, filters: Mappin
             pass
         else:
             return
-    page.goto(_build_mainland_page_url(scope, filters, offset), wait_until="domcontentloaded", timeout=20_000)
+    # The exact API response below is our readiness signal. Waiting for every
+    # deferred script can time out even after the job response has arrived.
+    page.goto(_build_mainland_page_url(scope, filters, offset), wait_until="commit", timeout=20_000)
 
 
 def _fetch_mainland_pages_sync(
@@ -908,7 +910,7 @@ def _read_mainland_page(page, scope: ByteDanceMainlandScope,
         try:
             with page.expect_response(
                 lambda response: _mainland_response_matches(response, scope, filters, offset),
-                timeout=20_000,
+                timeout=45_000,
             ) as response_info:
                 _navigate_mainland_page(page, scope, filters, offset,
                                        first=first or attempt > 0)
