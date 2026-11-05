@@ -43,3 +43,33 @@ def test_query_result_can_be_read_without_model_output_truncation(tmp_path, monk
     reread = app.get("/v1/career/catalog/results/" + result["result_id"]).json()["data"]
     assert reread["result_id"] == result["result_id"]
     assert reread["total"] == 0
+
+
+def test_scan_routes_stay_local_and_do_not_return_private_credentials(tmp_path,monkeypatch):
+    app=client(tmp_path,monkeypatch,local=False)
+    assert app.post('/v1/career/job-subscriptions/feishu-pairing').status_code==404
+    app=client(tmp_path,monkeypatch)
+    sid='a'*48
+    assert app.post('/v1/career/job-subscriptions/feishu-pairing/'+sid+'/poll').json()['data']['state']=='expired'
+    assert app.delete('/v1/career/job-subscriptions/feishu-pairing/'+sid).status_code==200
+    monkeypatch.setenv('DATABASE_URL','postgresql://unused.invalid')
+    assert app.post('/v1/career/job-subscriptions/feishu-pairing').status_code==404
+
+
+def test_connection_check_is_local_only_and_does_not_send_a_message(tmp_path,monkeypatch):
+    from extensions.career_mcp.services.job_subscriptions import JobSubscriptions
+    from extensions.career_mcp.config import CareerConfig
+    from extensions.career_mcp.services.job_notifications import BotSender
+    app=client(tmp_path,monkeypatch)
+    channel=JobSubscriptions(CareerConfig(tmp_path/'career')).save_feishu_app('cli_fixture','fixture-private-secret','ou_fixture')
+    def check(sender,credentials):
+        assert credentials['app_secret']=='fixture-private-secret'
+        return {'status':'failed','diagnostic':{'stage':'token','platform_code':21001,'reason':'policy_denied','message':'访问策略拒绝'}}
+    monkeypatch.setattr(BotSender,'check_feishu_app',check)
+    monkeypatch.setattr(BotSender,'send',lambda *args:(_ for _ in ()).throw(AssertionError('check must not send')))
+    path='/v1/career/job-subscriptions/channels/'+channel['id']+'/check'
+    response=app.post(path,json={})
+    assert response.status_code==200 and response.json()['data']['diagnostic']['platform_code']==21001
+    assert 'fixture-private-secret' not in response.text
+    monkeypatch.setenv('OPENCAR_LOCAL_MODE','0')
+    assert app.post(path,json={}).status_code==404

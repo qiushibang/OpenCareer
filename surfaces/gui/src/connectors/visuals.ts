@@ -27,7 +27,7 @@ export function humanize(ref: string): string {
 
 /** Display label for a ref — the descriptor title when known, else a humanized id. */
 export function labelFor(ref: string, byName: ConnectorMap): string {
-  return byName[ref]?.title || humanize(ref);
+  return ref === "browser" ? "浏览器" : byName[ref]?.title || humanize(ref);
 }
 
 /**
@@ -37,7 +37,7 @@ export function labelFor(ref: string, byName: ConnectorMap): string {
  */
 export function visualFor(ref: string, kind: string, byName: ConnectorMap): ConnectorVisual {
   const c = byName[ref];
-  if (c) return { logo: c.logo || ref, brand_color: c.brand_color, title: c.title, label: c.title };
+  if (c) return { logo: c.logo || ref, brand_color: c.brand_color, title: labelFor(ref,byName), label: labelFor(ref,byName) };
   if (kind === "mcp") return { logo: "mcp", label: humanize(ref) };
-  return { logo: ref, label: humanize(ref) };
+  return { logo: ref, label: labelFor(ref,byName) };
 }

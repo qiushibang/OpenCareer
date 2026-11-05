@@ -60,6 +60,29 @@ def test_first_download_is_complete_idempotent_and_preserves_tracking(tmp_path):
     assert "私有申请备注" not in (root / "manifest.json").read_text()
 
 
+def test_upstream_comparisons_and_older_feed_cannot_rollback_local_verification(tmp_path):
+    from extensions.career_mcp.database.migrations import connect, migrate
+    from extensions.career_mcp.domain.crawler import JobSnapshot
+    from extensions.career_mcp.services.crawler import CrawlerService
+    config = CareerConfig(tmp_path / "local")
+    sync = syncer(config, tmp_path / "unused-feed")
+    with connect(config.database_path) as db:
+        migrate(db)
+    sync._apply(DESCRIPTOR, [job()], NOW)
+    later = "2026-10-30T00:00:00Z"
+    rows = [job(observed_at=later), job("two", observed_at=later, first_seen_at=later), job("historical", observed_at=later, first_seen_at="2026-08-21T00:00:00Z")]
+    sync._apply(DESCRIPTOR, rows, later)
+    sync._apply(DESCRIPTOR, rows, later)
+    with connect(config.database_path) as db:
+        assert sorted(tuple(r) for r in db.execute("SELECT j.external_job_id,c.kind FROM job_catalog_changes c JOIN jobs j ON j.id=c.job_id")) == [("historical", "backfill"), ("one", "backfill"), ("two", "new")]
+    adapter = FakeAdapter(DESCRIPTOR.source_slug, [JobSnapshot("one", "本地新确认标题", "新的官网职责", "https://careers.example.com/job/one", "2026-10-31T00:00:00Z", "北京", "experienced")])
+    adapter.descriptor = DESCRIPTOR
+    CrawlerService(config).crawl(adapter)
+    sync._apply(DESCRIPTOR, [job(status="inactive")], NOW)
+    result = next(row for row in JobService(config).search_jobs()["jobs"] if row["source_url"].endswith("/one"))
+    assert result["title"] == "本地新确认标题" and result["status"] == "active"
+
+
 def test_updated_and_offline_jobs_follow_server_without_deleting_local_notes(tmp_path):
     root, config = tmp_path / "feed", CareerConfig(tmp_path / "local")
     publish(root, [job()])
@@ -213,8 +236,8 @@ def test_new_official_feed_sources_do_not_require_downloading_adapter_code(tmp_p
         syncer(config, root).run()
 
 
-@pytest.mark.parametrize("first_seen,expected_new", [("2026-10-28T12:00:00+08:00", 0), ("2026-10-28T20:00:00+08:00", 1)])
-def test_server_timezone_does_not_shift_the_daily_new_job_window(tmp_path, first_seen, expected_new):
+@pytest.mark.parametrize("first_seen", ["2026-10-28T12:00:00+08:00", "2026-10-28T20:00:00+08:00"])
+def test_server_normalizes_upstream_dates_without_treating_import_as_new(tmp_path, first_seen):
     from datetime import datetime, timezone
     from extensions.career_mcp.services.crawler import CrawlerService
     root, config = tmp_path / "feed", CareerConfig(tmp_path / "local")
@@ -222,5 +245,5 @@ def test_server_timezone_does_not_shift_the_daily_new_job_window(tmp_path, first
     syncer(config, root).run()
     crawler = CrawlerService(config, adapters=[FakeAdapter(DESCRIPTOR.source_slug, [], descriptor=DESCRIPTOR)],
                              clock=lambda: datetime(2026, 10, 29, 10, tzinfo=timezone.utc))
-    assert crawler.get_job_radar_digest()["events"]["by_type"].get("created", 0) == expected_new
+    assert crawler.get_job_radar_digest()["events"]["by_type"] == {"backfill": 1}
     assert JobService(config).search_jobs()["jobs"][0]["first_seen_at"].endswith("Z")

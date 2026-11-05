@@ -12,6 +12,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CLOUD_CHANGED,
+  isAlpha,
+  isLocal,
   getCloudStatus,
   getConnectors,
   getRecentChannels,
@@ -48,7 +50,13 @@ const BTN_ACCENT = "text-[12px] px-2.5 py-1.5 rounded-lg bg-accent text-white sh
 const BTN_BORDERED =
   "text-[12px] px-2.5 py-1.5 rounded-lg border border-line bg-paper hover:border-lineStrong shrink-0";
 
-export function AccessSection({
+// Public deployments stay isolated; the loopback-only local launcher exposes
+// the reviewed owner tool/folder controls through its separate capability policy.
+export function AccessSection(props:Parameters<typeof DesktopAccessSection>[0]) {
+  return isAlpha() && !isLocal() ? null : <DesktopAccessSection {...props} projectScoped={isLocal()?false:props.projectScoped} scratchPrimary={isLocal()||props.scratchPrimary}/>;
+}
+
+function DesktopAccessSection({
   sessionId,
   personaId,
   projectScoped,
@@ -111,7 +119,7 @@ export function AccessSection({
   // Child views (connect-in-context / channels drill-down) replace the section body inline.
   const [channelsFor, setChannelsFor] = useState<string | null>(null);
   const [connectFor, setConnectFor] = useState<Connector | null>(null);
-  // "+ Add a source…" (§32 addendum): the FULL catalog in-session. The list shows on focus,
+  // "+ 添加工具或服务" (§32 addendum): the FULL catalog in-session. The list shows on focus,
   // before any typing (FB-012: typing-to-see was a hidden step), and the query filters it
   // live; rich browsing (detail pages, connect states) stays on the global Connectors page.
   const [adding, setAdding] = useState(false);
@@ -144,7 +152,7 @@ export function AccessSection({
   const [addErr, setAddErr] = useState<string | null>(null);
   const loadSubs = () => getSubscriptions().then(setSubs).catch(() => setSubs([]));
   useEffect(() => {
-    if (!open) return;
+    if (!open || isLocal()) return;
     loadSubs();
     getRecentChannels().then(setRecent).catch(() => setRecent([]));
   }, [open]);
@@ -173,7 +181,7 @@ export function AccessSection({
     const channel = raw.includes(":") || raw.startsWith("#") ? raw : `${channelsFor}:${raw}`;
     const r = await subscribeChannel(sessionId, channel);
     if (!r.ok) {
-      setAddErr(r.error || "Couldn't add that channel.");
+      setAddErr(r.error || "暂时无法添加频道，请重试。");
       return;
     }
     setAddErr(null);
@@ -212,14 +220,14 @@ export function AccessSection({
   const names = live.map((c) => labelFor(c.connector, byName));
   const sourcesPart =
     names.length === 0
-      ? "no sources"
+      ? "未启用外部工具"
       : names.length <= 2
         ? names.join(", ")
         : `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
   const folderPart = projectScoped
     ? baseName(workspace || roots.find((r) => r.primary)?.path || "") || null
     : roots.length > 0
-      ? `${roots.length} folder${roots.length === 1 ? "" : "s"}`
+      ? `${roots.length} 个文件夹`
       : null;
   const summary = [sourcesPart, folderPart].filter(Boolean).join(" · ");
 
@@ -282,10 +290,10 @@ export function AccessSection({
             <div className="space-y-4">
               {/* Sources — each toggle is a per-session override (mute for THIS session only). */}
               <div>
-                <div className={`${SEC_H} mb-1.5`}>来源</div>
+                <div className={`${SEC_H} mb-1.5`}>工具与服务</div>
                 {connected.length === 0 && (
                   <div className="text-[12px] text-faint py-0.5">
-                    No connectors enabled for this session.
+                    本次对话未启用外部工具。
                   </div>
                 )}
                 <div className="space-y-1">
@@ -295,9 +303,9 @@ export function AccessSection({
                       <div className="min-w-0 flex-1">
                         <div className="text-[12.5px] font-medium leading-tight truncate">
                           <span>{labelFor(c.connector, byName)}</span>
-                          {c.detail && <span className="text-faint font-normal"> · {c.detail}</span>}
+                          {c.detail && c.detail.toLowerCase()!==c.connector.toLowerCase() && c.detail!==byName[c.connector]?.title && <span className="text-faint font-normal"> · {c.detail}</span>}
                         </div>
-                        {byName[c.connector]?.channels && (
+                        {!isLocal() && byName[c.connector]?.channels && (
                           <button
                             className="inline-flex items-center gap-0.5 text-[11px] text-accent hover:underline"
                             onClick={() => {
@@ -305,7 +313,7 @@ export function AccessSection({
                               setChannelsFor(c.connector);
                             }}
                           >
-                            Channels · {channelsOf(c.connector).length}
+                            接收频道 · {channelsOf(c.connector).length}
                             <Icon name="chevronRight" size={10} />
                           </button>
                         )}
@@ -313,14 +321,14 @@ export function AccessSection({
                       <Toggle
                         checked={c.enabled}
                         onChange={(next) => toggleSession(c.connector, next)}
-                        title="已为本次对话启用，点击可在此停用"
+                        title={c.enabled?"在本次对话中停用":"在本次对话中启用"}
                       />
                     </div>
                   ))}
                 </div>
                 {connected.length > 0 && (
                   <p className="text-[10.5px] text-faint mt-1 leading-snug">
-                    关闭后仅在<b>本次对话</b>中停用，连接器仍保持连接。
+                    开关仅影响本次对话，不会断开服务连接。
                   </p>
                 )}
                 {/* §32 addendum (owner ask 2026-07-13; FB-012): the catalog's long tail,
@@ -330,7 +338,7 @@ export function AccessSection({
                   <div className="mt-1.5">
                     <input
                       className="w-full px-2.5 py-1.5 rounded-lg border border-line bg-panel text-[12.5px] outline-hidden focus:border-accent"
-                      placeholder="搜索连接器…"
+                      placeholder="搜索工具或服务…"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
                       onKeyDown={(e) => {
@@ -346,7 +354,7 @@ export function AccessSection({
                       // Also covers a failed/empty catalog fetch: an open picker must never
                       // be silently blank — point at the Connectors page either way.
                       <div className="text-[11.5px] text-faint mt-1.5 px-0.5">
-                        No match — see all on the Connectors page below.
+                        未找到匹配项，可前往管理页面查看。
                       </div>
                     )}
                     <div className="mt-1 max-h-64 overflow-y-auto">
@@ -365,7 +373,7 @@ export function AccessSection({
                           <ConnectorBadge connector={visualFor(c.name, "connector", byName)} size={22} />
                           <span className="min-w-0 flex-1">
                             <span className="block text-[12.5px] font-medium leading-tight">
-                              {c.title}
+                              {labelFor(c.name,byName)}
                             </span>
                             <span className="block text-[11px] text-faint truncate">{c.blurb}</span>
                           </span>
@@ -380,16 +388,17 @@ export function AccessSection({
                     onClick={() => setAdding(true)}
                     data-testid="access-add-source"
                   >
-                    + Add a source…
+                    + 添加工具或服务
                   </button>
                 )}
+                {/* 服务管理是账户范围，不改变本次对话开关。 */}
                 {/* Lives with its list (tester ask 2026-07-26): each group's manage link sits
                     directly under that group, not pooled at the section's bottom. */}
                 <button
                   className="mt-1.5 block text-[12px] text-accent font-medium hover:underline text-left"
                   onClick={() => onOpenIntegrations?.()}
                 >
-                  Manage all connectors (global) →
+                  管理已连接的服务 →
                 </button>
               </div>
 
@@ -419,7 +428,7 @@ export function AccessSection({
                             else onOpenIntegrations?.();
                           }}
                         >
-                          Connect
+                          连接
                         </button>
                       </div>
                     ))}
@@ -431,7 +440,7 @@ export function AccessSection({
                   a quiet "+" link, structurally identical to Sources (owner ask 2026-07-13:
                   the old drawer's card wrapper read too heavy in the rail). */}
               <div data-testid="drawer-directories">
-                <div className={`${SEC_H} mb-1.5`}>文件夹</div>
+                <div className={`${SEC_H} mb-1.5`}>可访问文件夹</div>
                 <div className="-mx-1.5">
                   {roots.map((r) => (
                     <RootRow
@@ -459,7 +468,7 @@ export function AccessSection({
                     className="mt-1 text-[12px] text-accent hover:underline text-left"
                     onClick={() => setAddingFolder(true)}
                   >
-                    + Give access to a folder…
+                    + 添加可访问文件夹
                   </button>
                 )}
                 {rootsError && <div className="roots-err">{rootsError}</div>}
@@ -514,8 +523,7 @@ function ConnectInline({
       {/* Scope semantics, stated once (owner ask 2026-07-13): connecting is account-level,
           the toggle above is what scopes it to a session. */}
       <p className="text-[10.5px] text-faint mt-2 leading-snug">
-        Connecting makes {c.title} available to all your coworkers — the toggle in this list
-        controls just this session.
+        连接服务后可在其他对话中使用；此处开关仅影响本次对话。
       </p>
     </div>
   );
@@ -551,12 +559,12 @@ function ChannelsInline({
         onClick={onBack}
         aria-label="返回来源列表"
       >
-        <Icon name="arrowLeft" size={13} /> {label} channels
+        <Icon name="arrowLeft" size={13} /> {label} 接收频道
       </button>
-      <div className={`${SEC_H} mb-1.5`}>Subscribed channels · {channels.length}</div>
+      <div className={`${SEC_H} mb-1.5`}>已接收的频道 · {channels.length}</div>
       {channels.length === 0 ? (
         <div className="text-[12px] text-faint py-0.5">
-          Not listening to any {label} channel yet.
+          尚未接收 {label} 的频道消息。
         </div>
       ) : (
         <div className="space-y-1">
@@ -589,7 +597,7 @@ function ChannelsInline({
       <div className="flex items-center gap-1.5">
         <ChannelPicker value={draft} onChange={onDraft} recent={recent} onSubmit={onAdd} />
         <button className={BTN_ACCENT} disabled={!draft.trim()} onClick={onAdd}>
-          Add
+          添加
         </button>
       </div>
       {error && (
@@ -597,10 +605,7 @@ function ChannelsInline({
           {error}
         </p>
       )}
-      <p className="text-[10.5px] text-faint mt-1.5 leading-snug">
-        The agent receives messages posted to these channels. Removing one stops this session
-        from listening — the connector stays connected.
-      </p>
+      <p className="text-[10.5px] text-faint mt-1.5 leading-snug">{/* 产品说明移至代码：The agent receives messages posted to these channels. Removing one stops this session from listening — the connector stays connected. */}仅此对话接收；移除不会断开渠道。</p>
     </div>
   );
 }

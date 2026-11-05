@@ -94,7 +94,7 @@ export function PersonaView({
 
   if (error || !detail) {
     return (
-      <main className="flex-1 min-w-0 flex flex-col bg-paper">
+      <main className="oc-page oc-persona flex-1 min-w-0 flex flex-col bg-paper">
         {header}
         <div className="p-12 text-center text-faint text-[13px]">{error || "正在加载…"}</div>
       </main>
@@ -102,7 +102,7 @@ export function PersonaView({
   }
 
   return (
-    <main className="flex-1 min-w-0 flex flex-col bg-paper">
+    <main className="oc-page oc-persona flex-1 min-w-0 flex flex-col bg-paper">
       {header}
       <div className="flex-1 overflow-y-auto hairline-scroll">
         <div className="max-w-3xl mx-auto px-7 py-6 space-y-6">

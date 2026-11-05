@@ -130,6 +130,10 @@ class JobTrackingService:
             saved = repository.get(normalized_id)
             if saved is None:
                 raise RuntimeError("tracking record was not persisted")
+            import sqlite3
+            if isinstance(getattr(repository, "connection", None), sqlite3.Connection) and any(field in values for field in ("application_status", "note")):
+                from ..database.applications_repository import tracking_changed
+                tracking_changed(repository.connection, saved)
             result = {
                 **saved,
                 "events": repository.list_events(normalized_id),
@@ -150,9 +154,10 @@ class JobTrackingService:
             return
         connection = connect(self.config.database_path)
         try:
+            repository = JobTrackingRepository(connection)
             if write:
                 connection.execute("BEGIN IMMEDIATE")
-            yield JobTrackingRepository(connection)
+            yield repository
             if write:
                 connection.commit()
         except Exception:

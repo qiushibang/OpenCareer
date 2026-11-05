@@ -78,6 +78,7 @@ class LocalJobSync:
         result = {"state": state, "mode": "local", "sources": sources, "total_sources": len(sources),
                   "completed": sum(s["status"] == "succeeded" for s in sources),
                   "failed": sum(s["status"] == "failed" for s in sources),
+                  "pending": sum(s["status"] == "pending" for s in sources),
                   "updated_at": self.clock()}
         path = self.config.data_dir / STATUS_FILE
         temporary = path.with_suffix(".tmp")
@@ -110,10 +111,10 @@ class LocalJobSync:
         for adapter in adapters:
             old = previous.get(adapter.source_slug, {})
             fresh = (not force and old.get("status") == "succeeded"
-                     and self.clock() - old.get("checked_at", 0) < INTERVAL)
+                     and self.clock() - old.get("confirmed_at", 0) < INTERVAL)
             sources.append({"slug": adapter.source_slug, "name": adapter.descriptor.source_name,
                             "status": "succeeded" if fresh else "queued",
-                            "checked_at": old.get("checked_at", 0)})
+                            "checked_at": old.get("checked_at", 0), "confirmed_at": old.get("confirmed_at", 0)})
         self._save(sources, "running")
         for adapter, source in zip(adapters, sources):
             if source["status"] == "succeeded":
@@ -125,17 +126,20 @@ class LocalJobSync:
                 # own HTTP/browser timeouts. Keep the entire worker off the web process.
                 from .crawl_cli import _watchdog
                 if adapter.source_slug in resumable_slugs:
-                    for _ in range(200):
+                    for _ in range(12):
                         guard = _watchdog(300) if hasattr(signal, "SIGALRM") else nullcontext()
                         with guard:
                             result = self.resumable.run_batch(adapter)
                         source["observed_unique"] = result.get("observed_unique", 0)
+                        source["pass_number"] = result.get("pass_number", 1)
                         self._save(sources, "running")
                         if not result.get("has_more"):
                             break
                         time.sleep(self.pause)
                     else:
-                        raise RuntimeError("batch limit; checkpoint retained")
+                        source["status"] = "pending"
+                        self._save(sources, "running")
+                        continue
                     succeeded = (result["status"] == "committed"
                                  and self._publish_resumable(adapter, result))
                 else:
@@ -144,6 +148,9 @@ class LocalJobSync:
                         result = self.crawler.crawl(adapter)
                     succeeded = result.status == "succeeded"
                 source["status"] = "succeeded" if succeeded else "failed"
+                if succeeded:
+                    source["confirmed_at"] = self.clock()
+                    source["last_success_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(source["confirmed_at"]))
             except Exception:
                 # Remote response text may contain query tokens or HTML. Keep it out
                 # of the status API; catalog services retain their normal local evidence.
@@ -151,7 +158,7 @@ class LocalJobSync:
             source["checked_at"] = self.clock()
             self._save(sources, "running")
             time.sleep(self.pause)
-        return self._save(sources, "partial" if any(s["status"] == "failed" for s in sources) else "completed")
+        return self._save(sources, "partial" if any(s["status"] == "failed" for s in sources) else "running" if any(s["status"] == "pending" for s in sources) else "completed")
 
 
 @contextmanager
@@ -193,7 +200,7 @@ def main() -> int:
             while True:
                 marker = config.data_dir / REQUEST_FILE
                 force = marker.exists()
-                companies = None
+                companies = [s.strip() for s in os.environ.get("OPENCAR_LOCAL_JOB_COMPANIES", "").split(",") if s.strip()] or None
                 if force:
                     try:
                         requested = json.loads(marker.read_text())
@@ -214,6 +221,8 @@ def main() -> int:
                     else:
                         outcome = sync.run_cycle(force=force, **({"company_slugs": companies} if companies else {}))
                         cycle_ok = not outcome["failed"]
+                        if not cycle_ok or outcome.get("pending"):
+                            delay = 60 if outcome.get("pending") else 15 * 60
                 except Exception:
                     state = read_status(config)
                     if state.get("mode", mode) != mode:

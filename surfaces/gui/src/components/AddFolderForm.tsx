@@ -52,6 +52,7 @@ export function AddFolderForm({
 
   return (
     <div className="addfolder-form">
+      <p className="mb-2 text-xs text-muted">选择运行本地服务的这台电脑上的资料文件夹，默认只读。</p>
       <div className="addfolder-row">
         <input
           className="addfolder-path"

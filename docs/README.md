@@ -15,15 +15,16 @@ OpenCareer 是基于 OpenWorker Fork 的本地优先求职 Agent。目前已贯�
 - JD/已确认简历直读的多轮模拟面试、复盘和历史记录。
 - 所有 Conversation 的语音输入：浏览器使用豆包 ASR，桌面端使用本地 Whisper。
 
-Career 数据库当前 schema 为 v13。GUI 使用 Tauri/React，后端使用 Python，
+本地Career数据库当前schema为v15（个人申请、真实面试与历史）；生产数据库本批不迁移。GUI 使用 Tauri/React，后端使用 Python，
 Career 领域能力通过 `extensions/career_mcp` 与 OpenWorker 核心隔离。
 
-最新工程 Gate：
+最新开源本地版验证（2026-11-05）：
 
-- GUI 全量：47 files / 256 tests passed。
-- 全局 Conversation 语音聚焦回归：44 tests passed。
-- 生产构建、Python compileall 和 `git diff --check` 通过。
-- 真人麦克风转写仍需设备授权后的现场验收。
+- 后端 1432 passed / 41 skipped；Career 领域 529 passed / 5 deselected。
+- GUI 346 passed / 2 skipped；本地安装与真实浏览器 6 passed。
+- 独立安装审计无依赖漏洞，源码密钥扫描、类型检查及本地构建通过。
+- 真实模型、真人麦克风、第三方真实投递与 Windows OCR 仍按各自指南另行验收。
+- 本次只同步公开源码，生产网站未部署。详见 [发布验证说明](28_RELEASE_20261105.md)。
 
 准确的逐阶段证据见
 [`11_DEVELOPMENT_LOG.md`](11_DEVELOPMENT_LOG.md) 和
@@ -47,6 +48,7 @@ Career 领域能力通过 `extensions/career_mcp` 与 OpenWorker 核心隔离。
 
 | 任务 | 必读文档 |
 |---|---|
+| 求职进度工作台（本地首版） | [`2026-10-30-job-application-workspace.md`](superpowers/specs/2026-10-30-job-application-workspace.md)、[真实使用调研](research/2026-10-30-job-application-tracking.md) |
 | 项目范围与产品决策 | [`00_SCOPE_AND_DECISIONS.md`](00_SCOPE_AND_DECISIONS.md) |
 | OpenWorker 扩展边界 | [`02_OPENWORKER_INTEGRATION.md`](02_OPENWORKER_INTEGRATION.md) |
 | 当前技术架构 | [`03_TECHNICAL_ARCHITECTURE.md`](03_TECHNICAL_ARCHITECTURE.md) |
@@ -59,6 +61,11 @@ Career 领域能力通过 `extensions/career_mcp` 与 OpenWorker 核心隔离。
 | 安全和合规 | [`10_RISK_AND_COMPLIANCE.md`](10_RISK_AND_COMPLIANCE.md) |
 
 ## 运维手册
+
+- [`26_FRONTEND_DESIGN.md`](26_FRONTEND_DESIGN.md)：温暖浅色设计规则、页面覆盖、本地响应式与交互验收。
+- [`27_LOCAL_ACCESS.md`](27_LOCAL_ACCESS.md)：本地浏览器、外部服务连接和默认只读的文件夹授权；公共网站保持独立隔离。
+
+- [`25_APPLICATION_WORKSPACE.md`](25_APPLICATION_WORKSPACE.md)：本地申请表格、逐轮真实面试/面经、简历版本与完整Excel导出。
 
 - [`24_JOB_QUERY_AND_SUBSCRIPTIONS.md`](24_JOB_QUERY_AND_SUBSCRIPTIONS.md)：通用岗位 MCP、组合筛选、可信分类与每日群机器人订阅。
 

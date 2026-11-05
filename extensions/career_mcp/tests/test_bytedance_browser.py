@@ -42,6 +42,30 @@ FRONTIER_FIXTURE = (
 OBSERVED_AT = "2026-08-05T00:00:00Z"
 
 
+def test_mainland_batch_uses_normal_next_page_control_without_full_reload():
+    actions = []
+    class Locator:
+        def is_visible(self):
+            return False
+        def wait_for(self, **kwargs):
+            actions.append("wait")
+        def click(self, **kwargs):
+            actions.append("click")
+    class Page:
+        def get_by_role(self, *args, **kwargs):
+            return Locator()
+        def locator(self, selector):
+            actions.append(selector)
+            return Locator()
+        def goto(self, *args, **kwargs):
+            actions.append("goto")
+    bytedance._navigate_mainland_page(Page(), BYTEDANCE_MAINLAND_CAMPUS, {}, 10, first=False)
+    assert "click" in actions and "goto" not in actions
+    actions.clear()
+    bytedance._navigate_mainland_page(Page(), BYTEDANCE_MAINLAND_CAMPUS, {}, 100, first=True)
+    assert actions == ["goto"]
+
+
 def _payload() -> dict:
     return json.loads((FIXTURE_DIR / "listing_page_1.json").read_text())
 
@@ -212,6 +236,8 @@ def test_filter_metadata_builds_only_mainland_city_shards():
             "city_list": [
                 {"code": "CT_11", "name": "北京"},
                 {"code": "CT_125", "name": "上海"},
+                {"code": "CT_27", "name": "大同"},
+                {"code": "CT_100132", "name": "乌兰察布"},
                 {"code": "CT_163", "name": "新加坡"},
                 {"code": "CT_159", "name": "中国香港"},
             ],
@@ -226,6 +252,8 @@ def test_filter_metadata_builds_only_mainland_city_shards():
     assert metadata["mainland_cities"] == [
         {"code": "CT_11", "name": "北京"},
         {"code": "CT_125", "name": "上海"},
+        {"code": "CT_27", "name": "大同"},
+        {"code": "CT_100132", "name": "乌兰察布"},
     ]
     assert metadata["categories"] == [
         {"id": "6704215862603155720", "name": "研发"}

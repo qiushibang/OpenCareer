@@ -73,6 +73,15 @@ class JobSubscriptions:
         with self.db() as db:
             return [dict(r) for r in db.execute("SELECT id,name,kind,version FROM channels ORDER BY name")]
 
+    def save_feishu_app(self, app_id: str, app_secret: str, open_id: str) -> dict:
+        if not isinstance(app_id,str) or not re.fullmatch(r"cli_[A-Za-z0-9]{4,100}",app_id) or not isinstance(app_secret,str) or not 8 <= len(app_secret) <= 1000 or not isinstance(open_id,str) or not re.fullmatch(r"ou_[A-Za-z0-9_-]{4,150}",open_id):
+            raise ValueError("扫码结果缺少有效的应用或绑定用户信息，请重新扫码。")
+        channel_id=uuid.uuid4().hex
+        self.secrets.put("job-push:"+channel_id,{"app_id":app_id,"app_secret":app_secret,"open_id":open_id})
+        with self.db() as db:
+            db.execute("INSERT INTO channels VALUES (?,?,?,1)",(channel_id,"我的飞书（扫码绑定）","feishu_app"))
+        return {"id":channel_id,"name":"我的飞书（扫码绑定）","kind":"feishu_app","version":1}
+
     def save_channel(self, name: str, kind: str, url: str, secret: str = "") -> dict:
         validate_endpoint(kind, url)
         if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80 or not isinstance(secret, str) or len(secret) > 1000:
@@ -95,8 +104,17 @@ class JobSubscriptions:
         channel = next((c for c in self.channels() if c["id"] == channel_id), None)
         if not channel:
             raise ValueError("渠道不存在。")
-        status = self.sender.send(channel["kind"], self.secrets.get("job-push:" + channel_id) or {}, "OpenCareer 渠道测试：本消息不包含简历、对话或模型密钥。")
-        return {"status": status}
+        credentials=self.secrets.get("job-push:"+channel_id) or {}
+        message="OpenCareer 渠道测试：本消息不包含简历、对话或模型密钥。"
+        if hasattr(self.sender,"send_with_diagnostics"):
+            return self.sender.send_with_diagnostics(channel["kind"],credentials,message)
+        return {"status":self.sender.send(channel["kind"],credentials,message)}
+
+    def check_channel(self, channel_id: str) -> dict:
+        channel=next((c for c in self.channels() if c["id"]==channel_id),None)
+        if not channel:raise ValueError("渠道不存在。")
+        if channel["kind"]!="feishu_app":raise ValueError("当前无消息连接检查仅用于飞书扫码渠道。")
+        return self.sender.check_feishu_app(self.secrets.get("job-push:"+channel_id) or {})
 
     def draft(self, payload: dict, *, subscription_id: str | None = None) -> dict:
         if not isinstance(payload, dict) or set(payload) - {"title", "condition", "channel_ids", "send_time", "semantic_query", "include_inactive", "today"}:

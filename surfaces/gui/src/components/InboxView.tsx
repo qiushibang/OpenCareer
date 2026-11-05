@@ -141,12 +141,13 @@ export function InboxView({
   const routingLabel = routingName ? `#${routingName}` : routing;
 
   return (
-    <main className="flex-1 min-w-0 flex bg-paper">
+    <main className="oc-page oc-inbox flex-1 min-w-0 flex bg-paper">
       <div className="flex-1 min-w-0 overflow-y-auto hairline-scroll">
         <div className="max-w-4xl mx-auto px-7 py-6">
-          <PanelHead
+          {/* 页面背景说明：sub="集中处理 Agent 的审批、问题和通知，包括无人值守对话。" */}
+<PanelHead
             title="收件箱"
-            sub="集中处理 Agent 的审批、问题和通知，包括无人值守对话。"
+
           />
 
           <div className="flex gap-5 border-b border-line mb-4">
@@ -199,7 +200,7 @@ export function InboxView({
                   <span>仅发送到此处。</span>
                 ) : (
                   <span>
-                    仅发送到此处。可在连接器页面连接 Slack，将这些项目同步到频道。{" "}
+                    站内接收。{" "}
                   </span>
                 )}
                 <button

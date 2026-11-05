@@ -128,6 +128,24 @@ class _BrowserController:
                 self._context = self._browser.new_context(
                     viewport={"width": 1280, "height": 900}
                 )
+                from ..server import local_access
+                if local_access.enabled():
+                    # Follow-up navigation and assets must not pivot through redirects
+                    # into loopback/private services. The public browser is never enabled.
+                    def guard_request(route: Any) -> None:
+                        url = route.request.url
+                        if check_url(url):
+                            route.abort("blockedbyclient")
+                        else:
+                            route.continue_()
+                    self._context.route("**/*", guard_request)
+                    def guard_socket(socket: Any) -> None:
+                        url = socket.url.replace("wss://","https://",1).replace("ws://","http://",1)
+                        if check_url(url):
+                            socket.close(code=1008,reason="Private network access is disabled")
+                        else:
+                            socket.connect_to_server()
+                    self._context.route_web_socket("**/*", guard_socket)
                 self._page = self._context.new_page()
                 self._touch(
                     open=True, status="open", last_action="open browser", last_error=""
@@ -326,7 +344,18 @@ def _snapshot(page, max_chars: int) -> dict[str, Any]:
     }
 
 
-def make_browser_automation_tools() -> list[Callable[..., Any]]:
+def make_browser_automation_tools(*,roots:Optional[list[Any]]=None) -> list[Callable[..., Any]]:
+    def scoped_file(path:str,*,write:bool=False) -> Optional[Path]:
+        from ..roots import normalize_roots
+        from ..server import local_access
+        if not roots:
+            return None if local_access.enabled() else Path(path).expanduser().resolve()
+        allowed=normalize_roots(roots)
+        candidate=Path(path).expanduser()
+        if not candidate.is_absolute():candidate=allowed[0].path/candidate
+        candidate=candidate.resolve()
+        return candidate if any(candidate.is_relative_to(root.path) and (not write or root.writable) for root in allowed) else None
+
     tools: list[Callable[..., Any]] = []
 
     def browser_open_url(
@@ -484,8 +513,10 @@ def make_browser_automation_tools() -> list[Callable[..., Any]]:
     )
 
     def browser_upload_file(target: str, path: str) -> dict[str, Any]:
-        file_path = Path(path).expanduser().resolve()
-        if not file_path.exists():
+        file_path = scoped_file(path)
+        if file_path is None:
+            return {"error": "文件不在本次对话已授权的目录内。"}
+        if not file_path.is_file():
             return {"error": f"file not found: {file_path}"}
         return _BROWSER.call(
             "upload_file",
@@ -538,13 +569,11 @@ def make_browser_automation_tools() -> list[Callable[..., Any]]:
     )
 
     def browser_screenshot(path: str = "") -> dict[str, Any]:
+        chosen=path or ("browser-screenshot.png" if roots else str(Path(tempfile.gettempdir())/"coworker-browser-screenshot.png"))
+        out=scoped_file(chosen,write=True)
+        if out is None:
+            return {"error": "截图必须保存在本次对话已授权的可写目录内。"}
         def run(page):
-            out = (
-                Path(path).expanduser()
-                if path
-                else Path(tempfile.gettempdir()) / "coworker-browser-screenshot.png"
-            )
-            out = out.resolve()
             out.parent.mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(out), full_page=True)
             return {"ok": True, "path": str(out), "url": page.url}

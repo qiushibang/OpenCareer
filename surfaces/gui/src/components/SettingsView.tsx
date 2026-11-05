@@ -96,7 +96,7 @@ export function SettingsView({
   const [tab, setTab] = useState<SetTab>(wanted);
 
   return (
-    <main className="flex-1 min-w-0 flex bg-paper">
+    <main className="oc-page oc-settings flex-1 min-w-0 flex bg-paper">
       <nav className="page-subnav w-[208px] shrink-0 border-r border-line bg-panel/40 px-3 py-4">
         <div className="px-2 text-[13.5px] font-semibold mb-3 flex items-center gap-2">
           <Icon name="gear" size={16} /> 设置
@@ -106,6 +106,7 @@ export function SettingsView({
           return (
             <button
               key={t.key}
+              aria-current={active?"page":undefined}
               className={
                 "w-full text-left px-2.5 py-2 rounded-lg text-[13px] flex items-center gap-2 " +
                 (active ? "bg-paper text-accent font-medium" : "text-muted hover:bg-paper hover:text-ink")
@@ -124,16 +125,18 @@ export function SettingsView({
             <AppearanceSection />
           ) : tab === "models" ? (
             <section>
-              <PanelHead
-                title="模型"
-                sub={
+              {/* 页面背景说明：sub={
                   isLocal()
                     ? "配置你自己的模型服务密钥，密钥仅保存在本机。发送消息后，所选内容会提交给你选择的模型服务商。"
                     : isAlpha()
                     ? "管理模型 Provider：配置你自己的 API Key，或继续使用服务器默认模型。密钥保存在服务器上你的私人目录，仅本人可见。"
                     : "管理 Provider 和输入框中可选的模型。密钥仅保存在本机。"
-                }
+                } */}
+<PanelHead
+                title="模型"
+
               />
+              <p className="mb-5 text-xs text-muted">{isLocal() || !isAlpha() ? "密钥仅保存在本机。" : "密钥保存在你的服务器私有目录。"} 所选内容会发送给模型服务商。</p>
               <ModelsTab />
               {/* Token savings is model-spend behavior, so it lives here (UX-021),
                   not under General. 云端这些设置的保存接口是桌面专属（403），不渲染。 */}
@@ -283,9 +286,10 @@ function VoiceInputSection() {
 
   return (
     <section>
-      <PanelHead
+      {/* 页面背景说明：sub="在输入框中自然说话，录音和转写内容只保留在本机。" */}
+<PanelHead
         title="语音输入"
-        sub="在输入框中自然说话，录音和转写内容只保留在本机。"
+
       />
 
       <div className="space-y-4">
@@ -450,9 +454,7 @@ function InterviewVoiceProviderCard() {
           <h3 className="text-[13.5px] font-medium">
             火山引擎模拟面试语音
           </h3>
-          <p className="mt-1 text-[12px] text-muted">
-            用于中文 ASR/TTS。音频仅在内存中处理，默认不保存。
-          </p>
+          <p className="mt-1 text-[12px] text-muted">{/* 产品说明移至代码：用于中文 ASR/TTS。音频仅在内存中处理，默认不保存。 */}语音识别与合成；音频不落盘。</p>
         </div>
         <span
           className={
@@ -500,10 +502,7 @@ function InterviewVoiceProviderCard() {
           onChange={(value) => update("speaker", value)}
         />
       </div>
-      <p className="mt-3 text-[11.5px] text-muted">
-        新版只填写 API Key；旧版填写 App ID 和 Access Token。已保存的
-        Secret 不会回显。
-      </p>
+      <p className="mt-3 text-[11.5px] text-muted">{/* 产品说明移至代码：新版只填写 API Key；旧版填写 App ID 和 Access Token。已保存的 Secret 不会回显。 */}密钥已保存后不回显。</p>
       {error && (
         <div role="alert" className="mt-3 text-[12px] text-red-700">
           {error}
@@ -565,9 +564,10 @@ function PersonasSection({ onOpenPersona }: { onOpenPersona?: (id: string) => vo
 
   return (
     <section>
-      <PanelHead
+      {/* 页面背景说明：sub="管理已启用并显示在选择器中的 Agent，以及安装新的 Agent 包。" */}
+<PanelHead
         title="Agent"
-        sub="管理已启用并显示在选择器中的 Agent，以及安装新的 Agent 包。"
+
       />
       <PersonasTab key={galleryBump} onOpenPersona={onOpenPersona} />
       <button
@@ -617,7 +617,8 @@ function AppearanceSection() {
 
   return (
     <section>
-      <PanelHead title="通用" sub="管理 OpenCareer 在本机的外观和行为。" />
+      {/* 页面背景说明：sub="管理 OpenCareer 在本机的外观和行为。" */}
+<PanelHead title="通用"  />
 
       <div className={CARD + " p-4 mb-4"}>
         <div className={FIELD_LABEL}>主题</div>
@@ -628,7 +629,7 @@ function AppearanceSection() {
             </button>
           ))}
         </div>
-        <div className={FIELD_HELP}>自动模式会跟随 Mac 外观设置。</div>
+        {/* 设置行为说明：自动模式会跟随 Mac 外观设置。 */}
       </div>
 
       <SidebarCard />
@@ -670,7 +671,7 @@ function AppearanceSection() {
           </button>
           {desktop && <UpdateInline />}
         </div>
-        <div className={FIELD_HELP}>重新配置模型、首个自动任务和使用提示。</div>
+        {/* 设置行为说明：重新配置模型、首个自动任务和使用提示。 */}
       </div>
     </section>
   );
@@ -697,9 +698,7 @@ function TrustedWorkspacesCard() {
   return (
     <div className={CARD + " p-4 mb-4"} data-testid="trusted-workspaces-card">
       <div className={FIELD_LABEL}>可信工作区</div>
-      <div className={FIELD_HELP}>
-        可信项目可通过 .coworker/config.toml 管理允许执行的命令。
-      </div>
+      {/* 设置行为说明：可信项目可通过 .coworker/config.toml 管理允许执行的命令。 */}
       {workspaces === null ? (
         <div className="text-[12px] text-muted mt-3">正在加载…</div>
       ) : workspaces.length === 0 ? (
@@ -840,11 +839,9 @@ function TokenSavingsCard() {
           发送页面图片
         </button>
       </div>
-      <div className={FIELD_HELP}>
-        Claude, GPT and Gemini read PDFs natively — this only applies to models that
+      {/* 设置行为说明：Claude, GPT and Gemini read PDFs natively — this only applies to models that
         don&rsquo;t (GLM, Kimi, DeepSeek, local models…). Text extraction is cheapest; page
-        images cost more tokens and need a vision-capable model.
-      </div>
+        images cost more tokens and need a vision-capable model. */}
 
       <div className="mt-3 flex items-center gap-5">
         <label className="flex items-center gap-2.5">
@@ -873,10 +870,8 @@ function TokenSavingsCard() {
           <span className="text-[12.5px] text-muted">MB</span>
         </label>
       </div>
-      <div className={FIELD_HELP}>
-        PDFs over these limits are not attached — you&rsquo;ll see a notice in the composer
-        instead.
-      </div>
+      {/* 设置行为说明：PDFs over these limits are not attached — you&rsquo;ll see a notice in the composer
+        instead. */}
     </div>
   );
 }
@@ -920,11 +915,9 @@ function CompactionCard() {
   return (
     <div className={CARD + " p-4 mb-4"} data-testid="compaction-card">
       <div className={FIELD_LABEL}>上下文压缩</div>
-      <div className={FIELD_HELP}>
-        Long sessions are compacted automatically: older turns are summarized so the
+      {/* 设置行为说明：Long sessions are compacted automatically: older turns are summarized so the
         coworker keeps working instead of running out of context. Your visible transcript
-        is never changed — a small marker shows where compaction happened.
-      </div>
+        is never changed — a small marker shows where compaction happened. */}
 
       <div className="mt-3 flex items-center gap-5 flex-wrap">
         <label className="flex items-center gap-2.5">
@@ -967,10 +960,8 @@ function CompactionCard() {
           <span className="text-[12.5px] text-muted">tokens，以较小值为准</span>
         </label>
       </div>
-      <div className={FIELD_HELP}>
-        The cap makes very-large-context models compact early — quality and speed degrade
-        well before their nominal limit.
-      </div>
+      {/* 设置行为说明：The cap makes very-large-context models compact early — quality and speed degrade
+        well before their nominal limit. */}
 
       <div className="mt-3 flex items-center gap-2.5">
         <span className="text-[13px] text-ink">摘要模型</span>
@@ -988,10 +979,8 @@ function CompactionCard() {
           ))}
         </select>
       </div>
-      <div className={FIELD_HELP}>
-        The summary is written by this model. The default follows whatever model the
-        session is using.
-      </div>
+      {/* 设置行为说明：The summary is written by this model. The default follows whatever model the
+        session is using. */}
     </div>
   );
 }
@@ -1068,9 +1057,7 @@ function SidebarCard() {
           onChange={(e) => save(Number(e.target.value))}
         />
       </label>
-      <div className={FIELD_HELP}>
-        Longer lists collapse behind &ldquo;Show more&rdquo;. Applies per coworker and per project.
-      </div>
+      {/* 设置行为说明：Longer lists collapse behind &ldquo;Show more&rdquo;. Applies per coworker and per project. */}
     </div>
   );
 }
@@ -1134,10 +1121,8 @@ function FilesCard() {
             保存
           </button>
         </div>
-      <div className={FIELD_HELP}>
-        Each conversation gets its own folder under this location. Existing conversations keep their current
-        folder; you can grant access to more folders inside any conversation.
-      </div>
+      {/* 设置行为说明：Each conversation gets its own folder under this location. Existing conversations keep their current
+        folder; you can grant access to more folders inside any conversation. */}
       {scratchMsg && <div className="text-[12.5px] text-muted mt-2.5">{scratchMsg}</div>}
     </div>
   );

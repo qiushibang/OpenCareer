@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getConnectors } from "../api";
+import { getConnectors, isLocal } from "../api";
 import { McpTab } from "./ManageTabs";
 import { ConnectorsSection } from "./connectors/ConnectorsSection";
 import { Icon } from "./Icon";
@@ -33,16 +33,17 @@ export function IntegrationsView() {
   }, []);
 
   return (
-    <main className="flex-1 min-w-0 flex bg-paper">
+    <main className="oc-page oc-integrations flex-1 min-w-0 flex bg-paper">
       <nav className="page-subnav w-[208px] shrink-0 border-r border-line bg-panel/40 px-3 py-4">
         <div className="px-2 text-[13.5px] font-semibold mb-3 flex items-center gap-2">
           <Icon name="plug" size={16} /> 连接器
         </div>
-        {INT_TABS.map((t) => {
+        {INT_TABS.filter(t=>!isLocal()||t.key!=="mcp").map((t) => {
           const active = tab === t.key;
           return (
             <button
               key={t.key}
+              aria-current={active?"page":undefined}
               className={
                 "w-full text-left px-2.5 py-2 rounded-lg text-[13px] flex items-center justify-between " +
                 (active
@@ -68,17 +69,19 @@ export function IntegrationsView() {
         <div className="max-w-4xl mx-auto px-7 py-6">
           {tab === "connectors" ? (
             <section>
-              <PanelHead
+              {/* 页面背景说明：sub="管理 Agent 可使用的应用和工具，已连接项优先显示。" */}
+<PanelHead
                 title="连接器"
-                sub="管理 Agent 可使用的应用和工具，已连接项优先显示。"
+
               />
               <ConnectorsSection />
             </section>
           ) : (
             <section>
-              <PanelHead
+              {/* 页面背景说明：sub="通过 stdio 或 HTTP 连接外部工具服务，并在所有 Agent 间共享。" */}
+<PanelHead
                 title="MCP 服务"
-                sub="通过 stdio 或 HTTP 连接外部工具服务，并在所有 Agent 间共享。"
+
               />
               <McpTab />
             </section>
@@ -89,11 +92,11 @@ export function IntegrationsView() {
   );
 }
 
-export function PanelHead({ title, sub }: { title: string; sub: string }) {
+export function PanelHead({ title }: { title: string; sub?: string }) {
   return (
-    <div className="mb-4">
+    <div className="oc-page-head mb-4">
       <h2 className="text-[18px] font-semibold tracking-tight">{title}</h2>
-      <p className="text-[12.5px] text-muted mt-0.5">{sub}</p>
+      {/* 页面说明保留在调用处注释中；标题不重复介绍功能。 */}
     </div>
   );
 }

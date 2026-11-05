@@ -48,7 +48,7 @@ export function SupportAdmin() {
   return <div className="space-y-4">
     <div className="flex gap-2"><button className="btn" onClick={() => setOperations(false)}>反馈问题</button><button className="btn" onClick={() => setOperations(true)}>系统提醒与管理记录</button></div>
     {operations ? <SupportOperations /> : <>
-    <p className="text-sm text-muted">仅支持反馈与脱敏诊断，不提供用户简历、私密对话或服务器文件访问。回复会展示给用户，请勿包含其他用户信息。</p>
+    <p className="text-sm text-muted">{/* 产品说明移至代码：仅支持反馈与脱敏诊断，不提供用户简历、私密对话或服务器文件访问。回复会展示给用户，请勿包含其他用户信息。 */}仅含反馈与脱敏诊断；回复对用户可见。</p>
     <div className="flex flex-wrap gap-2"><label>状态<select className="input ml-2" value={filter} onChange={(e) => { setOffset(0); setFilter(e.target.value); }}><option value="">全部</option>{Object.entries(states).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <label>类型<select className="input ml-2" value={kind} onChange={(e) => { setOffset(0); setKind(e.target.value); }}><option value="">全部</option><option value="bug">功能故障</option><option value="suggestion">体验建议</option><option value="other">其他</option></select></label>
       <button className="btn" onClick={() => void load()}>刷新问题</button></div>

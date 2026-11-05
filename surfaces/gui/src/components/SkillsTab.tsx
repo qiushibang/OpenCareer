@@ -165,9 +165,7 @@ export function SkillsTab({
       <div className="flex items-start justify-between gap-3 mb-4">
         <div>
           <h2 className="text-[16px] font-semibold">Skill</h2>
-          <p className="text-[12.5px] text-muted mt-1 leading-relaxed">
-            Agent 可在每次对话中复用的指令。在此停用后将对所有对话生效。
-          </p>
+          {/* 产品说明移至代码：Agent 可在每次对话中复用的指令。在此停用后将对所有对话生效。 */}
         </div>
         {/* One add-action, three doors behind it (SKILLS-SPEC §5): the list is the page. */}
         <div className="relative shrink-0">
@@ -277,9 +275,7 @@ export function SkillsTab({
       {upload ? (
         <div className={`${CARD} p-4 mb-4`}>
           <div className="text-[13px] font-medium mb-1">安装前审阅</div>
-          <p className="text-[12.5px] text-muted mb-3">
-            请阅读具体指令，安装后 Agent 将按照这些指令工作。
-          </p>
+          <p className="text-[12.5px] text-muted mb-3">{/* 产品说明移至代码：请阅读具体指令，安装后 Agent 将按照这些指令工作。 */}安装前请核对指令。</p>
           <div className="text-[13px] mb-1">
             <span className="font-medium">{upload.name}</span>
             <span className="text-muted"> — {upload.description || "无描述"}</span>

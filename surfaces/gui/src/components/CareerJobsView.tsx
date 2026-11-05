@@ -1,4 +1,6 @@
 import { FormEvent, MouseEvent, useCallback, useEffect, useRef, useState } from "react";
+import type { SubscriptionChatContext } from "../subscriptionChat";
+import { applicationsRequest, type Application } from "../applications";
 
 import {
   getCareerResumes,
@@ -40,11 +42,13 @@ const STATUS_NAMES: Record<string, string> = {
 };
 
 const EVENT_NAMES: Record<string, string> = {
-  created: "首次发现",
+  new: "新增岗位",
+  updated: "内容更新",
+  backfill: "历史补录",
   changed: "岗位变化",
   missing: "暂未发现",
   offline: "岗位下线",
-  reopened: "重新上线",
+  reopened: "重新开放",
 };
 
 const APPLICATION_STATUS_NAMES: Record<CareerApplicationStatus, string> = {
@@ -64,6 +68,7 @@ const APPLICATION_STATUSES = Object.keys(
 ) as CareerApplicationStatus[];
 
 const displayStatus = (value: string) => STATUS_NAMES[value] || value;
+const staleConfirmation = (job: {status: string; last_seen_at: string}) => job.status === "active" && Date.now() - Date.parse(job.last_seen_at) > 48 * 3600 * 1000;
 
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat("zh-CN", {
@@ -94,9 +99,13 @@ const jobScopeClass = (active: boolean) =>
 export function CareerJobsView({
   onStartResumeCoach,
   onStartInterview,
+  onOpenApplication,
+  onConfigureSubscription,
 }: {
   onStartResumeCoach?: (payload: ResumeCoachLaunchPayload) => void;
   onStartInterview?: (payload: InterviewLaunchPayload) => void;
+  onOpenApplication?: (id: string) => void;
+  onConfigureSubscription?: (context: SubscriptionChatContext) => void;
 } = {}) {
   const [filters, setFilters] = useState<CareerJobFilters | null>(null);
   const [queryInput, setQueryInput] = useState("");
@@ -104,7 +113,8 @@ export function CareerJobsView({
   const [companySlug, setCompanySlug] = useState("");
   const [location, setLocation] = useState("");
   const [recruitmentType, setRecruitmentType] = useState("");
-  const [status, setStatus] = useState("active");
+  // Keep lifecycle data for tools; the radar has no lifecycle filter control.
+  const status = "active";
   const [favoriteOnly, setFavoriteOnly] = useState(false);
   const [applicationStatus, setApplicationStatus] = useState<
     CareerApplicationStatus | ""
@@ -117,11 +127,14 @@ export function CareerJobsView({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showSubscriptions, setShowSubscriptions] = useState(false);
   const standalone = typeof isLocal === "function" && isLocal();
+  const [subscriptionDraft,setSubscriptionDraft]=useState<{title?:string;send_time?:string;subscription_id?:string;channel_ids?:string[]}>();
   useEffect(() => {
     const read = () => {
       try {
         const stored = sessionStorage.getItem("opencareer-catalog-query");
         if (stored) { setAdvanced(JSON.parse(stored)); setOffset(0); sessionStorage.removeItem("opencareer-catalog-query"); }
+        const subscription=sessionStorage.getItem("opencareer-subscription-query");
+        if(subscription){setSubscriptionDraft(JSON.parse(subscription));setShowSubscriptions(true);sessionStorage.removeItem("opencareer-subscription-query");}
       } catch { /* Invalid browser state is ignored; no query is executed. */ }
     };
     read(); window.addEventListener("opencareer:catalog-open", read);
@@ -129,6 +142,7 @@ export function CareerJobsView({
   }, []);
   const refreshCatalog = useCallback(() => setCatalogRevision(value => value + 1), []);
   const previousList = useRef({ criteria: "", catalogRevision: 0 });
+  const rateLimitRetries = useRef(0);
   const [jobs, setJobs] = useState<CareerJobSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [selectedId, setSelectedId] = useState("");
@@ -167,8 +181,10 @@ export function CareerJobsView({
 
   useEffect(() => {
     let current = true;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
     const criteria = JSON.stringify([query, companySlug, location, recruitmentType,
       status, favoriteOnly, applicationStatus, offset, advanced]);
+    if (previousList.current.criteria !== criteria) rateLimitRetries.current = 0;
     const preserveSelection = previousList.current.criteria === criteria
       && previousList.current.catalogRevision !== catalogRevision;
     previousList.current = { criteria, catalogRevision };
@@ -197,6 +213,7 @@ export function CareerJobsView({
           return;
         }
         const nextJobs = result.jobs || [];
+        rateLimitRetries.current = 0;
         setJobs(nextJobs);
         setTotal(result.total || 0);
         setSelectedId((value) =>
@@ -206,13 +223,24 @@ export function CareerJobsView({
         );
       })
       .catch((failure) => {
-        if (current) setError(failure instanceof Error ? failure.message : "无法连接本地岗位服务。");
+        if (!current) return;
+        const message = failure instanceof Error ? failure.message : "无法连接本地岗位服务。";
+        const delay = Number(failure?.retryAfterMs);
+        // Retry only an explicit rate-limit response, respect Retry-After, and
+        // stop after two attempts. Query changes/unmount cancel stale retries.
+        if (Number.isFinite(delay) && delay > 0 && rateLimitRetries.current < 2) {
+          const wait = Math.min(60000, Math.max(1000, delay));
+          rateLimitRetries.current += 1;
+          setError(`${message}将在 ${Math.ceil(wait / 1000)} 秒后自动重试。`);
+          retryTimer = setTimeout(() => setListRevision(value => value + 1), wait);
+        } else setError(message);
       })
       .finally(() => {
         if (current) setLoading(false);
       });
     return () => {
       current = false;
+      clearTimeout(retryTimer);
     };
   }, [
     query,
@@ -437,23 +465,22 @@ export function CareerJobsView({
   const rangeEnd = Math.min(offset + PAGE_SIZE, total);
 
   return (
-    <main className="flex-1 min-w-0 bg-paper overflow-hidden flex flex-col">
+    <main className="oc-page oc-jobs flex-1 min-w-0 bg-paper overflow-hidden flex flex-col">
       <header className="shrink-0 bg-panel border-b border-line px-3 py-3 sm:px-6 sm:py-4">
         <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
           <div>
             <h1 className="text-xl font-semibold">发现岗位</h1>
-            <p className="text-[12.5px] text-muted mt-1">
-              浏览已入库的官方招聘岗位，选择岗位后在右侧查看完整 JD。
-            </p>
+            {/* 产品说明移至代码：浏览已入库的官方招聘岗位，选择岗位后在右侧查看完整 JD。 */}
           </div>
           <div className="text-[12px] text-muted">{total.toLocaleString()} 个岗位</div>
         </div>
-        <LocalJobSyncBanner onUpdated={refreshCatalog} />
-        {standalone && <div className="flex flex-wrap gap-3 items-center mb-3">
-          <button className="text-sm text-accent border border-line rounded-lg px-3 py-2" onClick={() => setShowAdvanced(v => !v)}>组合筛选</button>
-          <button className="text-sm text-accent border border-line rounded-lg px-3 py-2" onClick={() => setShowSubscriptions(true)}>岗位订阅</button>
-          {advanced && <><p className="text-xs text-muted flex-1">{describeCondition(advanced.condition || {all: []})}{advanced.today ? "；今天首次发现" : ""}</p><button className="text-xs text-accent" onClick={() => {setAdvanced(null);setAdvancedResult(null);setOffset(0);}}>清除组合条件</button></>}
-        </div>}
+        <div className="radar-toolbar flex flex-wrap gap-3 items-center mb-3">
+          <LocalJobSyncBanner onUpdated={refreshCatalog} showStatus={false} />
+          {standalone && <><button className="text-sm text-accent border border-line rounded-lg px-3 py-2" onClick={() => setShowAdvanced(v => !v)}>组合筛选</button>
+          <button className="text-sm text-accent border border-line rounded-lg px-3 py-2" onClick={() => {setSubscriptionDraft(undefined);setShowSubscriptions(true);}}>岗位订阅</button>
+          {advanced && <><p className="text-xs text-muted flex-1">{describeCondition(advanced.condition || {all: []})}{advanced.today ? "；今天新增" : ""}</p><button className="text-xs text-accent" onClick={() => {setAdvanced(null);setAdvancedResult(null);setOffset(0);}}>清除组合条件</button></>}
+        </>}
+        </div>
         {showAdvanced && <CatalogQueryForm onSubmit={criteria => {setAdvanced(criteria);setOffset(0);setShowAdvanced(false);}} />}
         {advancedResult?.semantic.partial && <p role="status" className="text-sm text-warnInk mb-2">仅评估了 {advancedResult.semantic.evaluated} 个候选，当前数量不是全库总数。{advancedResult.semantic.next_offset !== null && <button className="text-accent ml-2" onClick={() => {setAdvanced(p => ({...p,semantic_offset:advancedResult.semantic.next_offset!}));setOffset(0);}}>评估下一批候选</button>}</p>}
         {advanced && advancedResult?.warnings.map(w => <p key={w} className="text-xs text-warnInk mb-1">{w}</p>)}
@@ -485,7 +512,7 @@ export function CareerJobsView({
           </button>
         </div>
         <div
-          className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1.6fr)_repeat(4,minmax(120px,1fr))]"
+          className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1.6fr)_repeat(3,minmax(120px,1fr))]"
           data-testid="job-filter-grid"
         >
           <form onSubmit={submitSearch} className="flex gap-1.5">
@@ -545,21 +572,7 @@ export function CareerJobsView({
               </option>
             ))}
           </select>
-          <select
-            aria-label="岗位状态"
-            className="rounded-lg border border-line bg-paper px-2.5 py-2 text-[12px]"
-            value={status}
-            onChange={(event) =>
-              resetOffset(() => setStatus(event.target.value))
-            }
-          >
-            <option value="">全部状态</option>
-            {(filters?.statuses || []).map((item) => (
-              <option key={item.value} value={item.value}>
-                {displayStatus(item.value)}（{item.count}）
-              </option>
-            ))}
-          </select>
+
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <select
@@ -591,13 +604,12 @@ export function CareerJobsView({
         </div>
         </fieldset>
       </header>
-      {showSubscriptions && <JobSubscriptionsPanel condition={advanced?.condition || {all: [
+      {showSubscriptions && <JobSubscriptionsPanel key={JSON.stringify(subscriptionDraft)} initialDraft={subscriptionDraft} condition={advanced?.condition || {all: [
         ...(companySlug ? [{field:"company",op:"in",values:[companySlug]}] : []),
         ...(location ? [{field:"locations",op:"in",values:[location]}] : []),
         ...(query ? [{field:"text",op:"contains",values:[query]}] : []),
         ...(recruitmentType ? [{field:"recruitment_type",op:"in",values:[recruitmentType]}] : []),
-        ...(status ? [{field:"status",op:"in",values:[status]}] : []),
-      ]}} today={advanced?.today} includeInactive={advanced?.include_inactive ?? status !== "active"} semanticQuery={advanced?.semantic_query} onClose={() => setShowSubscriptions(false)} />}
+      ]}} today={advanced?.today} includeInactive={advanced?.include_inactive ?? status !== "active"} semanticQuery={advanced?.semantic_query} onConfigureInChat={onConfigureSubscription ? prompt => {setShowSubscriptions(false);onConfigureSubscription(prompt);} : undefined} onClose={() => setShowSubscriptions(false)} />}
 
       <div
         className="flex-1 min-h-0 overflow-y-auto grid grid-cols-1 lg:overflow-hidden lg:grid-cols-[minmax(300px,38%)_1fr]"
@@ -609,8 +621,8 @@ export function CareerJobsView({
               <div className="text-center text-muted py-16">正在加载岗位…</div>
             )}
             {!loading && error && (
-              <div className="rounded-lg bg-red-50 text-red-700 p-3 text-sm">
-                {error}
+              <div role="alert" className="rounded-lg bg-red-50 text-red-700 p-3 text-sm">
+                {error}<button type="button" className="ml-3 underline" onClick={() => {rateLimitRetries.current=0;setListRevision(value=>value+1);}}>重新加载</button>
               </div>
             )}
             {!loading && !error && jobs.length === 0 && (
@@ -648,8 +660,8 @@ export function CareerJobsView({
                     >
                       {careerJobTypeLabel(job.recruitment_type)}
                     </span>
-                    <span className="rounded-full bg-green-50 text-green-700 px-2 py-0.5">
-                      {displayStatus(job.status)}
+                    <span className={"rounded-full px-2 py-0.5 " + (staleConfirmation(job) ? "bg-paper text-muted" : "bg-green-50 text-green-700")}>
+                      {staleConfirmation(job) ? "待核验" : displayStatus(job.status)}
                     </span>
                     {job.tracking.application_status !==
                       "not_started" && (
@@ -756,7 +768,7 @@ export function CareerJobsView({
                       {careerJobTypeLabel(detail.recruitment_type)}
                     </span>
                     <span className="rounded-full bg-green-50 text-green-700 px-2 py-0.5">
-                      {displayStatus(detail.status)}
+                      {staleConfirmation(detail) ? "待核验" : displayStatus(detail.status)}
                     </span>
                   </div>
                 </div>
@@ -808,11 +820,7 @@ export function CareerJobsView({
                 </div>
               </header>
 
-              <div className="grid grid-cols-1 gap-3 text-[11.5px] text-muted sm:grid-cols-3">
-                <div className="rounded-lg bg-paper p-3">
-                  首次发现
-                  <div className="text-ink mt-1">{formatDate(detail.first_seen_at)}</div>
-                </div>
+              <div className="radar-metadata grid grid-cols-1 gap-3 text-[11.5px] text-muted sm:grid-cols-2">
                 <div className="rounded-lg bg-paper p-3">
                   最近确认
                   <div className="text-ink mt-1">{formatDate(detail.last_seen_at)}</div>
@@ -824,6 +832,13 @@ export function CareerJobsView({
               </div>
 
               <section className="rounded-xl bg-paper p-4 space-y-3">
+                {standalone && onOpenApplication && <div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold">求职进度</h3><p className="text-xs text-muted mt-1">{APPLICATION_STATUS_NAMES[detail.tracking.application_status]} · 在工作台管理面试、面经和导出</p></div><button className="rounded-lg bg-accent px-3 py-2 text-xs text-white disabled:opacity-40" disabled={trackingPending} onClick={async()=>{
+                  if(draftNote!==(detail.tracking.note||"")||draftStatus!==detail.tracking.application_status){setTrackingError("请先保存下面的原进度草稿，再打开求职进度。");return;}
+                  setTrackingPending(true);setTrackingError("");
+                  try{const application=await applicationsRequest<Application>("",{job_id:detail.id});onOpenApplication(application.id);}catch(e){setTrackingError((e as Error).message);}finally{setTrackingPending(false);}
+                }}>加入／打开求职进度</button></div>}
+                <details open={!standalone}>
+                <summary className="text-xs text-muted cursor-pointer mb-3">原申请进度与备注（快速编辑）</summary>
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold">
                     我的申请进度
@@ -918,6 +933,8 @@ export function CareerJobsView({
                     </div>
                   )}
                 </div>
+                </details>
+                {standalone && trackingError && <p role="alert" className="text-xs text-danger">{trackingError}</p>}
               </section>
 
               <section>
@@ -948,7 +965,7 @@ export function CareerJobsView({
               <section>
                 <h3 className="text-sm font-semibold mb-2">变化记录</h3>
                 <div className="space-y-2">
-                  {(detail.events || []).map((event, index) => (
+                  {(detail.catalog_events || detail.events || []).filter(event => event.event_type !== "created").map((event, index) => (
                     <div
                       key={`${event.occurred_at}-${index}`}
                       className="rounded-lg bg-paper px-3 py-2 text-[12px]"
@@ -961,7 +978,7 @@ export function CareerJobsView({
                       </span>
                     </div>
                   ))}
-                  {!detail.events?.length && (
+                  {!(detail.catalog_events || detail.events)?.some(event => event.event_type !== "created") && (
                     <div className="text-[12px] text-muted">暂无变化记录</div>
                   )}
                 </div>
@@ -1012,7 +1029,7 @@ export function CareerJobsView({
                   ))}
                 </select>
               </label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="radar-metadata grid grid-cols-2 gap-3">
                 <label className="text-xs text-muted">
                   面试时长
                   <select

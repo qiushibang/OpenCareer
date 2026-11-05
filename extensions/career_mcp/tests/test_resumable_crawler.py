@@ -102,6 +102,7 @@ def test_resumable_crawler_checkpoints_without_partial_catalog_write(
             "SELECT next_offset FROM crawl_cycle_shards"
         ).fetchone()[0] == 1
 
+    adapter.initial_shards = lambda: (_ for _ in ()).throw(AssertionError("checkpoint must not depend on refetching metadata"))
     second = service.run_batch(adapter)
 
     assert second["status"] == "running"

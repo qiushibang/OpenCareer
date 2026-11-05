@@ -42,7 +42,7 @@ function toCron(time: string, freq: string): string {
 // The §28 page shell: full-bleed main, centered ≤4xl column — same as Connectors/Activity/Inbox.
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="flex-1 min-w-0 flex bg-paper">
+    <main className="oc-page oc-scheduled flex-1 min-w-0 flex bg-paper">
       <div className="flex-1 min-w-0 overflow-y-auto hairline-scroll">
         <div className="max-w-4xl mx-auto px-7 py-6">{children}</div>
       </div>
@@ -123,7 +123,8 @@ export function ScheduledView({ onOpenRun, onRunNow, initialOpenId }: Props) {
     <Shell>
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
-          <PanelHead title="自动任务" sub="由 OpenCareer 按计划重复执行的任务。" />
+          {/* 页面背景说明：sub="由 OpenCareer 按计划重复执行的任务。" */}
+<PanelHead title="自动任务"  />
         </div>
         <button
           className="text-[12.5px] px-3 py-1.5 rounded-lg border border-lineStrong bg-panel hover:border-accent hover:text-accent shrink-0"

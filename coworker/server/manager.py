@@ -405,6 +405,9 @@ class SessionManager:
 
     def scratch_base(self) -> Path:
         """Common area for per-conversation scratch directories. Configurable via prefs."""
+        from . import local_access
+        if local_access.enabled():
+            return state_dir() / "local-workspaces"
         base = self._prefs.get("scratch_base") or self.DEFAULT_SCRATCH_BASE
         return Path(base).expanduser()
 
@@ -497,13 +500,16 @@ class SessionManager:
         # Orphan surfaces are multi-root: the scratch (ws) is the primary writable root, plus any
         # folders the user added (persisted per session). Code/Chat stay single-root (roots=None).
         roots = None
-        if ag.family == "knowledge" and ws:
+        from . import local_access
+        local_career = local_access.enabled() and agent_name == "career"
+        if (ag.family == "knowledge" or local_career) and ws:
             extra = [
                 r
                 for r in ((record.extra_roots if record else []) or [])
-                if Path(str(r.get("path", ""))).is_dir()
+                if Path(str(r.get("path", ""))).is_dir() and (not local_career or not local_access.protected_folder(Path(str(r["path"]))))
             ]
-            roots = [{"path": ws, "writable": True, "label": "scratch"}, *extra]
+            primary = self._provision_scratch(session_id) if local_career else ws
+            roots = [{"path": primary, "writable": True, "label": "scratch"}, *extra]
         engine = build_engine(
             agent=ag,
             workspace=ws,
@@ -573,7 +579,7 @@ class SessionManager:
         if alpha.enabled():
             # Apply on every construction path (including durable/background resume),
             # before any turn, not only when a browser happens to connect.
-            engine.registry.retain(alpha.conversation_tools())
+            engine.registry.retain(alpha.engine_tools(engine.registry,browser="browser" in self.effective_connectors(session_id,agent_name)))
             engine.max_iterations = min(engine.max_iterations, 16)
             engine.permissions.mode = Mode.CUSTOM
             engine.permissions.allowed_commands.clear()
@@ -581,6 +587,11 @@ class SessionManager:
             engine.permissions.session_allow_tools.clear()
             engine.permissions.task_rules.clear()
             engine.permissions.auto_allow_tools = set(alpha.AUTO_APPROVE_TOOLS)
+        if local_career:
+            from ..roots import render_context
+            engine.permissions.workspace_root = Path(roots[0]["path"]).resolve()
+            previous_context = engine.context_provider
+            engine.context_provider = lambda: (previous_context() if previous_context else "") + "\n" + render_context(engine.roots)
         self._engines[session_id] = engine
         if is_new_session:
             self._emit_session_created(session_id, agent_name)
@@ -980,14 +991,14 @@ class SessionManager:
 
     # -- MCP --------------------------------------------------------------------
     async def prepare_mcp_tools(
-        self, session_id: str, *, workspace: Optional[str] = None, agent: str = "code"
+        self, session_id: str, *, workspace: Optional[str] = None, agent: str = "code", refresh: bool = False
     ) -> list[Any]:
         """Connect enabled MCP servers (global + workspace) and return their tool callables.
 
         Called from the async WS handler before `get_engine`; no-op if the engine is already
         built (its MCP tools are attached). Servers that fail to connect are skipped.
         """
-        if session_id in self._engines:
+        if session_id in self._engines and not refresh:
             return []
         from ..connectors.descriptors import get_descriptor
         from ..connectors.tool_defs import (
@@ -1188,6 +1199,8 @@ class SessionManager:
             # the descriptor's mcp_url is gone) and re-arms at every session
             # start — the owner-hit asana leftover, 2026-07-20.
             delete_global_server(name)
+        from . import local_access
+        await local_access.refresh_all(self)
         return result
 
     async def signout_mcp(self, name: str) -> dict[str, Any]:
@@ -1331,7 +1344,8 @@ class SessionManager:
 
     def list_artifacts(self, session_id: str) -> list[dict[str, Any]]:
         record = self.session_store.load(session_id)
-        workspace = record.workspace if record else self.default_workspace
+        from . import local_access
+        workspace = self._provision_scratch(session_id) if local_access.enabled() else (record.workspace if record else self.default_workspace)
         if not workspace:
             return []
         root = Path(workspace).expanduser().resolve()
@@ -1411,7 +1425,8 @@ class SessionManager:
     ) -> tuple[Optional[Path], Optional[str]]:
         """Resolve an artifact path under the session's workspace, or (None, error)."""
         record = self.session_store.load(session_id)
-        workspace = record.workspace if record else self.default_workspace
+        from . import local_access
+        workspace = self._provision_scratch(session_id) if local_access.enabled() else (record.workspace if record else self.default_workspace)
         if not workspace:
             return None, "no workspace"
         root = Path(workspace).expanduser().resolve()
@@ -1723,7 +1738,8 @@ class SessionManager:
         import subprocess
         import sys
 
-        if alpha.headless():
+        from . import local_access
+        if alpha.headless() and not local_access.enabled():
             return {"ok": False, "error": alpha.DESKTOP_ONLY_ERROR}
 
         if sys.platform == "darwin":
@@ -3855,7 +3871,8 @@ class SessionManager:
                 for i, r in enumerate(engine.roots)
             ]
         record = self.session_store.load(session_id)
-        primary = (
+        from . import local_access
+        primary = self._provision_scratch(session_id) if local_access.enabled() else (
             record.workspace
             if record and record.workspace
             else self._provision_scratch(session_id)
@@ -3889,7 +3906,10 @@ class SessionManager:
         """Grant the session access to another folder (read-only or read-write). Mutates the live
         engine in place when running (file tools + permissions + context see it immediately) and
         persists it so a later resume still has it."""
+        from . import local_access, alpha
         p = Path(path).expanduser()
+        if local_access.enabled() and local_access.protected_folder(p):
+            return {"ok": False, "error": "请选择独立的资料文件夹，不能授权程序、配置目录或它们的上级目录。"}
         if not p.is_dir():
             return {"ok": False, "error": f"not a directory: {path}"}
         resolved = p.resolve()
@@ -3902,7 +3922,10 @@ class SessionManager:
                         r.writable = bool(writable)
             else:
                 engine.roots.append(RootDir(path=resolved, writable=bool(writable)))
-            self.session_store.set_extra_roots(session_id, self._extra_roots_of(engine))
+            if local_access.enabled():
+                self.save(session_id,engine)  # also persists a new, as-yet empty Career conversation
+            else:
+                self.session_store.set_extra_roots(session_id, self._extra_roots_of(engine))
         else:
             # A brand-new conversation has no record yet (it's only saved after the first turn) —
             # create one now so set_extra_roots has a row to update and the folder survives.
@@ -3910,11 +3933,11 @@ class SessionManager:
                 self.session_store.save(
                     SessionRecord(
                         session_id=session_id,
-                        workspace=self._provision_scratch(session_id),
+                        workspace=alpha.workspace() if local_access.enabled() else self._provision_scratch(session_id),
                         model=self.model,
                         mode=self.mode.value,
                         messages=[],
-                        agent="cowork",  # folder access is a Cowork affordance
+                        agent="career" if local_access.enabled() else "cowork",
                     )
                 )
             extra = [r for r in self.get_roots(session_id) if not r["primary"]]

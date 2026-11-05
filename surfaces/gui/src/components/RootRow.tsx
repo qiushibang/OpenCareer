@@ -4,7 +4,7 @@ import { baseName } from "../paths";
 
 // One directory row, shared by the composer popover and the session start panel. The primary is the
 // session's bound workspace — the repo/folder for Code/Ops (shown by name), or a throwaway scratch
-// for Cowork (shown as "Temporary space"). It's always read-write and can't be removed.
+// for Cowork (shown as "临时工作区"). It's always read-write and can't be removed.
 export function RootRow({
   root,
   busy,
@@ -23,7 +23,7 @@ export function RootRow({
 }) {
   const label = root.primary
     ? scratchPrimary
-      ? "Temporary space"
+      ? "临时工作区"
       : baseName(root.path)
     : root.label;
   return (
@@ -32,7 +32,7 @@ export function RootRow({
       <span className="root-text" title={root.path}>
         <span className="root-label">
           {label}
-          {root.primary && !scratchPrimary && <span className="root-tag"> main</span>}
+          {root.primary && !scratchPrimary && <span className="root-tag"> 主工作区</span>}
           {branch && (
             <span className="root-tag root-branch">
               {" "}
@@ -42,17 +42,17 @@ export function RootRow({
         </span>
         <span className="root-path">{root.path}</span>
       </span>
-      {!root.exists && <span className="root-tag warn">missing</span>}
+      {!root.exists && <span className="root-tag warn">路径不存在</span>}
       <button
         className={"root-access" + (root.writable ? " rw" : " ro")}
         onClick={() => onToggle(root)}
         disabled={busy || root.primary}
-        title={root.primary ? "The main workspace is always read-write" : "Toggle read-only / read-write"}
+        title={root.primary ? "主工作区具有读写权限" : "切换只读或读写权限"}
       >
-        {root.writable ? "Read-write" : "Read-only"}
+        {root.writable ? "可读写" : "只读"}
       </button>
       {!root.primary && (
-        <button className="root-x" onClick={() => onRemove(root.path)} disabled={busy} title="移除">
+        <button className="root-x" onClick={() => onRemove(root.path)} disabled={busy} title="移除" aria-label="移除">
           ×
         </button>
       )}

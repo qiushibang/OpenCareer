@@ -18,7 +18,7 @@
 
 - 产品：OpenCareer / OpenWorker Career。
 - 上游固定基线：`01b6f83b3927e02912dda84bb392942c13ca70d1`。
-- Career 数据库：schema v13。
+- Career 数据库：本地 SQLite schema v15（新增个人申请、真实面试与流程历史；生产数据库本批不迁移）。
 - GUI：React + Tauri。
 - 后端：OpenWorker Python Server。
 - Career 领域：`extensions/career_mcp`，通过可信工作区 MCP 接入。

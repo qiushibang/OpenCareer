@@ -96,10 +96,7 @@ export function PersonasTab({ onOpenPersona }: { onOpenPersona?: (id: string) =>
 
   return (
     <div>
-      <p className="text-[12.5px] text-muted mb-3 leading-relaxed">
-        Enable a coworker, then choose whether it appears in the new-session picker. The starred persona
-        is the default for new sessions.
-      </p>
+      {/* 产品说明移至代码：Enable a coworker, then choose whether it appears in the new-session picker. The starred persona is the default for new sessions. */}
 
       <div className={CARD + " divide-y divide-line mb-6"}>
         {personas.map((p) => (
@@ -206,11 +203,7 @@ export function PersonasTab({ onOpenPersona }: { onOpenPersona?: (id: string) =>
       </div>
 
       <div className={SEC_H + " mb-1.5"}>添加 Agent</div>
-      <p className="text-[12px] text-muted mb-3 leading-relaxed">
-        Load from a local directory or a public GitHub repo. Files are copied into a managed area (a
-        snapshot), so the persona stays stable even if the source changes. No code runs — a persona only
-        composes vetted tools.
-      </p>
+      <p className="text-[12px] text-muted mb-3 leading-relaxed">{/* 产品说明移至代码：Load from a local directory or a public GitHub repo. Files are copied into a managed area (a snapshot), so the persona stays stable even if the source changes. No code runs — a persona only composes vetted tools. */}从本地或 GitHub 导入配置，不执行代码。</p>
       <div className="flex items-center gap-2">
         <select className={SELECT} value={mode} onChange={(e) => setMode(e.target.value as "git" | "dir")}>
           <option value="git">GitHub URL</option>

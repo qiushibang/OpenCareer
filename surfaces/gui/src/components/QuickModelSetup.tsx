@@ -68,7 +68,7 @@ export function QuickModelSetup({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-label="配置自定义模型">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} data-testid="quick-setup-backdrop" />
-      <div className="relative w-full max-w-xl rounded-xl2 border border-line bg-panel p-5 shadow-xl max-h-[85vh] overflow-y-auto" data-testid="quick-setup">
+      <div className="oc-modal relative w-full max-w-xl rounded-xl2 border border-line bg-panel p-5 shadow-xl max-h-[85vh] overflow-y-auto" data-testid="quick-setup">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-[15px] font-semibold text-ink">配置自定义模型</div>

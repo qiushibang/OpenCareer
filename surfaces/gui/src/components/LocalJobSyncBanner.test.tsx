@@ -41,3 +41,11 @@ it("distinguishes shared snapshots from the last upstream crawl result", async (
   expect(screen.getByText(/服务器与本机仍保留/)).toBeTruthy();
   expect(screen.getByRole("button", { name: "重试同步" })).toBeTruthy();
 });
+
+it("keeps a manual sync control when operational diagnostics are hidden",async()=>{
+ api.getLocalJobSync.mockResolvedValue({ok:true,state:"completed",updated_at:0,sources:[]});api.refreshLocalJobs.mockResolvedValue({ok:true,queued:true});
+ await act(async()=>{render(<LocalJobSyncBanner onUpdated={vi.fn()} showStatus={false}/>);});
+ expect(screen.queryByLabelText("官方岗位采集")).toBeNull();
+ await act(async()=>{fireEvent.click(screen.getByRole("button",{name:"一键同步岗位"}));});
+ expect(api.refreshLocalJobs).toHaveBeenCalledTimes(1);expect(screen.getByRole("status").textContent).toContain("已请求同步");
+});

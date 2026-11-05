@@ -280,7 +280,7 @@ export function CareerProfileView({
 
   if (loading) {
     return (
-      <main className="flex-1 grid place-items-center bg-paper text-muted">
+      <main className="oc-page oc-profile flex-1 grid place-items-center bg-paper text-muted">
         正在加载简历库…
       </main>
     );
@@ -288,15 +288,13 @@ export function CareerProfileView({
 
   if (resumes.length === 0 && !error) {
     return (
-      <main className="flex-1 grid place-items-center bg-paper px-8">
+      <main className="oc-page oc-profile flex-1 grid place-items-center bg-paper px-8">
         <div className="max-w-md text-center">
           <div className="w-12 h-12 rounded-xl bg-panel border border-line grid place-items-center mx-auto mb-4">
             <Icon name="file" size={22} />
           </div>
           <h1 className="text-xl font-semibold">尚未建立求职档案</h1>
-          <p className="text-sm text-muted mt-2">
-            可以导入多份 PDF 或 DOCX 简历，分别用于不同岗位。
-          </p>
+          <p className="text-sm text-muted mt-2">{/* 产品说明移至代码：可以导入多份 PDF 或 DOCX 简历，分别用于不同岗位。 */}导入 PDF 或 DOCX 简历。</p>
           <button
             className="mt-5 px-4 py-2 rounded-lg bg-accent text-white text-sm"
             onClick={onImportResume}
@@ -309,14 +307,12 @@ export function CareerProfileView({
   }
 
   return (
-    <main className="flex-1 min-w-0 overflow-y-auto bg-paper">
+    <main className="oc-page oc-profile flex-1 min-w-0 overflow-y-auto bg-paper">
       <div className="max-w-6xl mx-auto px-4 py-5 sm:px-7 sm:py-6">
         <header className="flex flex-col items-start justify-between gap-4 mb-5 sm:flex-row">
           <div>
             <h1 className="text-xl font-semibold">我的求职档案</h1>
-            <p className="text-[12.5px] text-muted mt-1">
-              管理多份定制简历；所有内容仍基于已确认的真实经历。
-            </p>
+            {/* 产品说明移至代码：管理多份定制简历；所有内容仍基于已确认的真实经历。 */}
           </div>
           <div className="flex flex-wrap gap-2">
             <button

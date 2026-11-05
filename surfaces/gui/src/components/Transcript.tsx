@@ -1,3 +1,4 @@
+import { CareerQueryActions } from "./CareerQueryActions";
 import { useState } from "react";
 import type { ApprovalDecision, Item } from "../types";
 import { isPrivateResumeTool, shortToolArgs } from "./ApprovalCard";
@@ -6,7 +7,6 @@ import { Markdown } from "./Markdown";
 import { ConnectorMessageCard } from "./ConnectorMessageCard";
 import { Icon } from "./Icon";
 import { openSupport } from "../supportFault";
-import { JobCatalogCards } from "./JobCatalogCards";
 
 // Long user pastes swallow the transcript (owner ask 2026-07-30): clamp past a generous
 // threshold with a more…/less… toggle. Normal typed messages never see the control; the
@@ -329,7 +329,6 @@ function TurnGroup({
         </div>
       )}
     </details>
-    {tools.filter(t => t.name.endsWith("search_job_catalog") && t.status !== "…").slice(-1).map((t,i) => <JobCatalogCards key={i} preview={t.preview} />)}
     </div>
   );
 }
@@ -367,11 +366,12 @@ export function Transcript({ items, running, streamingText, onRetry }: Props) {
   // breakers (user, connector, notices, plan/dir requests…). Trailing assistant texts are the
   // ANSWER and render as bubbles after the group; interior assistant texts are narration and
   // stay inside. A run with no activity at all is just bubbles (unchanged chat behavior).
-  const blocks: Array<{ turn: TurnItem[]; live?: boolean } | { item: Item; i: number }> = [];
+  const blocks: Array<{ turn: TurnItem[]; live?: boolean } | { item: Item; i: number } | { actions:ToolItem[] }> = [];
   let run: TurnItem[] = [];
   const flush = (live = false) => {
     if (!run.length) return;
     const turn = [...run];
+    const actionTools=turn.filter((it):it is ToolItem=>it.kind==="tool");
     run = [];
     const answers: AssistantItem[] = [];
     // A live run with tool activity keeps its trailing text inside as the status line;
@@ -383,6 +383,7 @@ export function Transcript({ items, running, streamingText, onRetry }: Props) {
     if (turn.some((it) => it.kind !== "assistant")) blocks.push({ turn, live });
     else turn.forEach((t) => blocks.push({ item: t, i: -1 }));
     answers.forEach((a) => blocks.push({ item: a, i: -1 }));
+    if(!live&&actionTools.length)blocks.push({actions:actionTools});
   };
   items.forEach((item, i) => {
     if (item.kind === "tool" || item.kind === "assistant" || (item.kind === "approval" && item.resolved))
@@ -406,6 +407,7 @@ export function Transcript({ items, running, streamingText, onRetry }: Props) {
   return (
     <div className="transcript">
       {blocks.map((block, bi) => {
+        if("actions" in block)return <CareerQueryActions tools={block.actions} key={bi}/>;
         if ("turn" in block)
           return (
             <TurnGroup

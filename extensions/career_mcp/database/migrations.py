@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from ..domain.manual_jd import utc_now_iso
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 15
 
 _KNOWN_CRAWL_SOURCES = {
     "xiaomi-careers": {
@@ -739,6 +739,19 @@ def migrate(connection: sqlite3.Connection) -> None:
                 "INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)",
                 (13, utc_now_iso()),
             )
+        if version < 14 <= SCHEMA_VERSION:
+            connection.execute("CREATE TABLE job_catalog_baselines(source_id TEXT PRIMARY KEY REFERENCES crawl_sources(id), observed_at TEXT NOT NULL, origin TEXT NOT NULL)")
+            connection.execute("CREATE TABLE job_catalog_changes(job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE, source_id TEXT NOT NULL REFERENCES crawl_sources(id), kind TEXT NOT NULL CHECK(kind IN ('new','updated','reopened','backfill')), observed_at TEXT NOT NULL, window_start TEXT, origin TEXT NOT NULL, UNIQUE(job_id,kind,observed_at))")
+            connection.execute("CREATE INDEX job_catalog_changes_job ON job_catalog_changes(job_id,observed_at)")
+            connection.execute("INSERT INTO schema_migrations(version,applied_at) VALUES (?,?)", (14, utc_now_iso()))
+        if version < 15 <= SCHEMA_VERSION:
+            connection.execute("CREATE TABLE career_applications(id TEXT PRIMARY KEY, job_id TEXT REFERENCES jobs(id) ON DELETE SET NULL, is_current INTEGER NOT NULL DEFAULT 1, migrated_job_id TEXT UNIQUE, data_json TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)")
+            connection.execute("CREATE UNIQUE INDEX career_applications_current_job ON career_applications(job_id) WHERE job_id IS NOT NULL AND is_current=1")
+            connection.execute("CREATE TABLE career_application_interviews(id TEXT PRIMARY KEY, application_id TEXT NOT NULL REFERENCES career_applications(id) ON DELETE CASCADE, data_json TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)")
+            connection.execute("CREATE INDEX career_application_interviews_parent ON career_application_interviews(application_id)")
+            connection.execute("CREATE TABLE career_application_history(id TEXT PRIMARY KEY, application_id TEXT NOT NULL REFERENCES career_applications(id) ON DELETE CASCADE, event_type TEXT NOT NULL, summary TEXT NOT NULL, occurred_at TEXT NOT NULL)")
+            connection.execute("CREATE INDEX career_application_history_parent ON career_application_history(application_id,occurred_at)")
+            connection.execute("INSERT INTO schema_migrations(version,applied_at) VALUES (?,?)", (15, utc_now_iso()))
         connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         connection.commit()
     except Exception:

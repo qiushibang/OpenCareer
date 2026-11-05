@@ -14,9 +14,9 @@ from zoneinfo import ZoneInfo
 from ..config import CareerConfig
 from .jobs import JobService
 
-VERSION = "2026-10-29.3"
+VERSION = "2026-10-29.4"
 TZ = ZoneInfo("Asia/Shanghai")
-FAMILIES = {"product": ["产品经理", "产品岗", "产品策划", "产品专家", "产品负责人", "Product Manager"],
+FAMILIES = {"product": ["产品经理", "产品岗", "产品策划", "产品专家", "产品负责人", "Product Manager", "Product Intern", "Product Management Intern"],
             "algorithm": ["算法", "机器学习", "深度学习", "研究科学家"],
             "engineering": ["开发工程师", "研发工程师", "软件工程师", "前端", "后端"],
             "design": ["设计师", "交互设计"], "operations": ["运营"], "other": []}
@@ -36,7 +36,8 @@ LABELS = {"product": "产品", "algorithm": "算法", "engineering": "研发", "
           "llm_training": "大模型训练", "llm_inference": "大模型推理"}
 ALIASES = {"字节": "bytedance", "字节跳动": "bytedance", "ByteDance": "bytedance", "小米": "xiaomi", "美团": "meituan", "腾讯": "tencent", "阿里": "alibaba", "阿里巴巴": "alibaba"}
 FIELDS = {"company", "locations", "recruitment_type", "status", "job_family", "directions", "business_lines", "business_line_candidates", "official_department", "official_category", "text", "title", "first_seen_at", "published_at", "last_seen_at"}
-DATES = {"first_seen_at", "published_at", "last_seen_at"}
+DATES = {"first_seen_at", "published_at", "last_seen_at", "new_at", "updated_at", "reopened_at", "backfilled_at"}
+FIELDS.update(DATES | {"change_kind"})
 
 
 def instant(value: str) -> datetime:
@@ -67,6 +68,11 @@ def classify(job: dict) -> dict:
     family = "other"
     for name, terms in FAMILIES.items():
         hit = next((term for term in terms if has_term(term, title + " " + (category or ""))), None)
+        if name == "product" and not hit:
+            # Role suffixes distinguish 产品（写作）实习生 from 产品运营/设计/研发实习生.
+            role = re.search(r"产品\s*(?:[（(][^）)\n]{1,40}[）)]\s*)?(?:实习生|实习|助理)", title)
+            if role and not any(word in role.group() for word in ("运营", "设计", "研发", "开发", "测试", "销售", "解决方案")):
+                hit = role.group()
         if hit:
             family = name
             evidence.append({"field": "job_family", "value": name, "origin": "rule", "text": hit})
@@ -209,11 +215,12 @@ class JobCatalog:
                 values.update(value if isinstance(value, list) else [value] if value else [])
             observed[field] = {"values": [{"value": v, "count": n} for v, n in values.most_common(50)],
                                "unique_values": len(values), "truncated": len(values) > 50, "unknown_jobs": unknown}
-        return {"version": 1, "fields": sorted(FIELDS), "operators": ["in", "contains", "between", "unknown"],
+        return {"version": 2, "fields": sorted(FIELDS - {"first_seen_at"}), "operators": ["in", "contains", "between", "unknown"],
                 "groups": ["all", "any", "not"], "date_interval": "[start,end)", "timezone": "Asia/Shanghai",
-                "default_status": "active", "newness": "公共目录首次发现，非首次导入时间",
+                "default_status": "active", "newness": "连续两次完整来源确认（间隔不超过48小时）之间新出现的岗位；初次同步与中断恢复计为历史补录。事件日期是观察时间，不承诺官网实际发布时间。",
                 "companies": facets["companies"], "locations": facets["locations"], "company_aliases": ALIASES,
                 "recruitment_types": facets["recruitment_types"],
+                "change_kinds": {"new": "新增", "updated": "更新", "reopened": "重新开放", "backfill": "历史补录"},
                 "observed_classification_values": observed,
                 "job_families": {k: LABELS[k] for k in FAMILIES}, "directions": {k: LABELS[k] for k in DIRECTIONS},
                 "semantic_candidate_limit": 100, "now": self.clock().isoformat(),
@@ -245,10 +252,11 @@ class JobCatalog:
             raise ValueError("语义条件必须是 1–1000 字的文本。")
         if today:
             day = self.clock().astimezone(TZ).date()
-            c = {"all": [c, {"field": "first_seen_at", "op": "between", "values": [datetime.combine(day, time.min, TZ).isoformat(), datetime.combine(day + timedelta(days=1), time.min, TZ).isoformat()]}]}
+            c = {"all": [c, {"field": "new_at", "op": "between", "values": [datetime.combine(day, time.min, TZ).isoformat(), datetime.combine(day + timedelta(days=1), time.min, TZ).isoformat()]}]}
         rows = [j for j in self._records(c, active_only=not include_inactive) if (include_inactive or j["status"] == "active") and matches(j, c)]
-        rows.sort(key=lambda j: (instant(j["first_seen_at"]).timestamp(), j["id"]), reverse=True)
+        rows.sort(key=lambda j: (instant(j["last_seen_at"]).timestamp(), j["id"]), reverse=True)
         total_candidates, warnings = len(rows), []
+        warnings.append("监测初始基线之前的每日新增无法回溯；首次完整采集完成也不能恢复此前某天的新增，只能跟踪基线之后的变化。")
         stale = sum((self.clock() - instant(j["last_seen_at"])).total_seconds() > 7 * 86400 for j in rows)
         if stale:
             warnings.append(f"候选中有 {stale} 个岗位超过7天未确认，请以官网为准；仍保留原在招标记，不推断为下线。")
@@ -269,16 +277,18 @@ class JobCatalog:
             warnings.append("语义判断仅使用每个岗位前4000字的原文证据，信息不足的岗位未被判断为匹配。")
         page = rows if collect else rows[offset:offset + limit]
         for job in page:
+            job["recruitment_confidence"] = "recently_confirmed" if (self.clock() - instant(job["last_seen_at"])).total_seconds() <= 48 * 3600 else "needs_verification"
             job["match_evidence"] = job["classification"]["evidence"] + job.get("semantic_evidence", [])
             for key in ("description_raw", "responsibilities", "requirements"):
                 job.pop(key, None)
+            job.pop("first_seen_at", None)
         result = {"kind": "job_catalog_result", "result_id": uuid.uuid4().hex, "jobs": page, "query": query_options, "total": None if partial else len(rows),
                 "evaluated_matches": len(rows), "candidate_total": total_candidates,
                 "limit": len(rows) if collect else limit, "offset": offset, "has_more": not collect and offset + limit < len(rows),
                 "applied_condition": c, "include_inactive": include_inactive, "semantic_query": semantic_query,
                 "semantic": {"evaluated": evaluated, "cache_hits": self._semantic_cache_hits, "model_calls": evaluated - self._semantic_cache_hits,
                              "partial": partial, "next_offset": semantic_offset + evaluated if semantic_query and semantic_offset + evaluated < total_candidates else None},
-                "warnings": warnings, "sort": "first_seen_at_desc,id_desc", "timezone": "Asia/Shanghai", "generated_at": self.clock().isoformat(), "freshness": self.status()}
+                "warnings": warnings, "sort": "last_seen_at_desc,id_desc", "timezone": "Asia/Shanghai", "generated_at": self.clock().isoformat(), "freshness": self.status()}
         if not collect:
             with sqlite3.connect(self.config.data_dir / "catalog-derived.sqlite3", timeout=30) as cache:
                 cache.execute("CREATE TABLE IF NOT EXISTS query_results (id TEXT PRIMARY KEY, data TEXT, created REAL)")
@@ -336,12 +346,12 @@ class JobCatalog:
     def status(self) -> dict:
         from ..local_jobs import read_status
         state = read_status(self.config)
-        result = {k: state.get(k) for k in ("mode", "state", "completed", "failed", "updated_at", "published_at", "sources")}
+        result = {k: state.get(k) for k in ("mode", "state", "completed", "failed", "pending", "updated_at", "published_at", "sources")}
         stale = []
         for source in state.get("sources", []):
             success = source.get("last_success_at")
             if state.get("mode") == "local":
-                timestamp = source.get("checked_at", 0) if source.get("status") == "succeeded" else 0
+                timestamp = source.get("confirmed_at", 0)
                 success = datetime.fromtimestamp(timestamp, timezone.utc).isoformat() if timestamp else None
             if not success or (self.clock() - instant(success)).total_seconds() > 48 * 3600:
                 stale.append({"slug": source.get("slug"), "last_success_at": success})

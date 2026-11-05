@@ -4,12 +4,31 @@ import { Transcript } from "./Transcript";
 import { humanizeTool } from "../humanize";
 import type { Item } from "../types";
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 it("offers feedback for a correlated error while retaining retry", () => {
   render(<Transcript items={[{ kind: "notice", tone: "warn", text: "请求失败", retriable: true, requestId: "a".repeat(32) } as Item]} onApprove={vi.fn()} onRetry={vi.fn()} />);
   expect(screen.getByRole("button", { name: "反馈此问题" })).toBeTruthy();
   expect(screen.getByTestId("notice-retry")).toBeTruthy();
+});
+
+it("uses ordinary tool steps without a separate catalog result", async () => {
+  const resultId = "a".repeat(32);
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ok:true,data:{
+    total:54, evaluated_matches:54, warnings:["来源较旧，请以官网为准。"], has_more:false,
+    query:{condition:{all:[]}}, jobs:Array.from({length:54}, (_,i) => ({id:String(i),title:`工具岗位${i+1}`,
+      company:{name:"测试公司"},locations:["北京"],first_seen_at:"2026-10-29T00:00:00Z",
+      match_evidence:[],source_url:`https://jobs.example/${i}`})),
+  }}), {headers:{"Content-Type":"application/json"}})));
+  render(<Transcript items={[
+    {kind:"user",text:"找北京产品实习岗位"},
+    {kind:"tool",id:"catalog",name:"mcp__career__search_job_catalog",args:{},status:"ok",preview:JSON.stringify({result_id:resultId})},
+    {kind:"assistant",text:"以下是我整合后的岗位建议。"},
+  ]} onApprove={vi.fn()} />);
+  expect(screen.queryByRole("button",{name:/匹配 54 个岗位/})).toBeNull();
+  expect(screen.queryByText("工具岗位1")).toBeNull();
+  expect(screen.getByText("以下是我整合后的岗位建议。")).toBeTruthy();
+  expect(fetch).not.toHaveBeenCalled();
 });
 
 // §33 TurnGroup: the user-message → final-answer span is ONE disclosure; interior assistant

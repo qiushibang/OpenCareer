@@ -114,9 +114,7 @@ export function CareerResumeCoachLauncher({
                 正在读取简历…
               </div>
             ) : resumes.length === 0 ? (
-              <p className="mt-4 rounded-lg bg-paper p-4 text-sm text-muted">
-                暂无已确认简历，请前往我的求职档案导入并确认简历。
-              </p>
+              <p className="mt-4 rounded-lg bg-paper p-4 text-sm text-muted">{/* 产品说明移至代码：暂无已确认简历，请前往我的求职档案导入并确认简历。 */}请先导入并确认简历。</p>
             ) : (
               <div className="mt-4 space-y-2">
                 {resumes.map((resume) => (

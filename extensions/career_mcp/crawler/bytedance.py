@@ -68,6 +68,7 @@ BYTEDANCE_MAINLAND_CAMPUS = ByteDanceMainlandScope(
 )
 
 _MAINLAND_CITY_NAMES = {
+    "大同", "乌兰察布",
     "北京", "上海", "深圳", "杭州", "成都", "广州", "西安", "武汉",
     "重庆", "珠海", "郑州", "南京", "青岛", "济南", "合肥", "苏州",
     "厦门", "长沙", "天津", "福州", "昆明", "太原", "南昌", "无锡",
@@ -810,6 +811,28 @@ def _fetch_mainland_page_sync(
     )
 
 
+def _navigate_mainland_page(page, scope: ByteDanceMainlandScope, filters: Mapping[str, object], offset: int, *, first: bool) -> None:
+    """Use the public site's normal pagination, retaining exact response checks.
+
+    Full navigation is the compatibility fallback if the public UI changes.
+    No custom API request, signature, login, or access-control workaround.
+    """
+    if not first:
+        try:
+            guide = page.get_by_role("button", name="稍后再说", exact=True)
+            if guide.is_visible():
+                guide.click(timeout=5000)
+            page.locator(f'.atsx-pagination-item-active[title="{offset // 10}"]').wait_for(state="visible", timeout=5000)
+            button = page.locator('.atsx-pagination-next:not(.atsx-pagination-disabled)[title="下一页"]')
+            button.wait_for(state="visible", timeout=5000)
+            button.click(timeout=5000)
+        except Exception:
+            pass
+        else:
+            return
+    page.goto(_build_mainland_page_url(scope, filters, offset), wait_until="domcontentloaded", timeout=20_000)
+
+
 def _fetch_mainland_pages_sync(
     scope: ByteDanceMainlandScope,
     filters: Mapping[str, object],
@@ -858,15 +881,7 @@ def _fetch_mainland_pages_sync(
                         ),
                         timeout=20_000,
                     ) as response_info:
-                        page.goto(
-                            _build_mainland_page_url(
-                                scope,
-                                filters,
-                                current_offset,
-                            ),
-                            wait_until="domcontentloaded",
-                            timeout=20_000,
-                        )
+                        _navigate_mainland_page(page, scope, filters, current_offset, first=index == 0)
                     payload = response_info.value.json()
                     if not isinstance(payload, dict):
                         raise ByteDanceAccessRestricted(

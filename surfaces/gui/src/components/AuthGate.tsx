@@ -30,7 +30,7 @@ function FilingFooter() {
 function FullPage({ children }: { children: ReactNode }) {
   return (
     <main className="min-h-screen bg-paper text-ink flex items-center justify-center px-5 py-10">
-      <section className="w-full max-w-[430px] rounded-[28px] border border-line bg-panel px-8 py-9 shadow-[0_22px_70px_rgba(21,31,48,0.10)]">
+      <section className="oc-auth-card w-full max-w-[430px] rounded-[28px] border border-line bg-panel px-8 py-9 shadow-[0_22px_70px_rgba(21,31,48,0.10)]">
         {children}
       </section>
       <FilingFooter />
@@ -105,9 +105,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
           OpenCareer
         </p>
         <h1 className="mt-4 text-2xl font-semibold">暂时无法确认登录状态</h1>
-        <p className="mt-3 text-sm leading-6 text-muted">
-          请检查网络连接后重试。你的对话和简历不会因此被修改。
-        </p>
+        <p className="mt-3 text-sm leading-6 text-muted">{/* 产品说明移至代码：请检查网络连接后重试。你的对话和简历不会因此被修改。 */}网络异常，请重新检查。</p>
         <button
           type="button"
           onClick={() => void refresh()}
@@ -134,9 +132,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
           OpenCareer
         </p>
         <h1 className="mt-4 text-2xl font-semibold">登录服务正在准备中</h1>
-        <p className="mt-3 text-sm leading-6 text-muted">
-          当前入口尚未开放，请稍后再来。现有内测数据仍保持隔离保存。
-        </p>
+        <p className="mt-3 text-sm leading-6 text-muted">{/* 产品说明移至代码：当前入口尚未开放，请稍后再来。现有内测数据仍保持隔离保存。 */}登录服务暂未开放，请稍后重试。</p>
       </FullPage>
     );
   }
@@ -148,9 +144,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
           OpenCareer
         </p>
         <h1 className="mt-4 text-2xl font-semibold">登录没有完成</h1>
-        <p className="mt-3 text-sm leading-6 text-muted">
-          本次登录凭据可能已过期，或者回调页面被重复打开。请重新登录；你的账号数据没有被修改。
-        </p>
+        <p className="mt-3 text-sm leading-6 text-muted">{/* 产品说明移至代码：本次登录凭据可能已过期，或者回调页面被重复打开。请重新登录；你的账号数据没有被修改。 */}请重新发起登录。</p>
         <a
           href={hostedLoginUrl(returnTo)}
           className="mt-7 flex w-full items-center justify-center rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-paper transition-opacity hover:opacity-90"
@@ -170,18 +164,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
         OpenCareer
       </p>
       <h1 className="mt-3 text-[28px] font-semibold leading-tight">你的 AI 求职工作台</h1>
-      <p className="mt-4 text-sm leading-6 text-muted">
-        登录后继续管理你的对话、简历、收藏岗位与申请进度。每位用户的数据独立保存。
-      </p>
+      {/* 产品说明移至代码：登录后继续管理你的对话、简历、收藏岗位与申请进度。每位用户的数据独立保存。 */}
       <a
         href={hostedLoginUrl(returnTo)}
         className="mt-8 flex w-full items-center justify-center rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-paper transition-opacity hover:opacity-90"
       >
         登录 OpenCareer
       </a>
-      <p className="mt-4 text-center text-[11px] leading-5 text-faint">
-        登录过程由 Authing 提供身份认证，OpenCareer 不保存你的登录密码。
-      </p>
+      <p className="mt-4 text-center text-[11px] leading-5 text-faint">{/* 产品说明移至代码：登录过程由 Authing 提供身份认证，OpenCareer 不保存你的登录密码。 */}由 Authing 验证，本站不保存登录密码。</p>
     </FullPage>
   );
 }

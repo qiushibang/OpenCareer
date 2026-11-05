@@ -253,9 +253,7 @@ export function ModelsTab() {
         {(info?.suggested_models?.length || 0) > 0 && (
           <div className="mt-6" data-testid="model-preview">
             <div className={SEC_H + " mb-1.5"}>包含的模型</div>
-            <p className="text-[12px] text-muted mb-2.5 leading-relaxed">
-              保存 API Key 后，可在「默认模型」卡片中选择这些模型。
-            </p>
+            {/* 产品说明移至代码：保存 API Key 后，可在「默认模型」卡片中选择这些模型。 */}
             <div className="space-y-1">
               {(info?.suggested_models || []).map((m) => {
                 const full = ps.sel === "openai" ? m : `${ps.sel}:${m}`;
@@ -308,10 +306,7 @@ export function ModelsTab() {
       {info?.configured ? (
         <div className="mt-6">
           <div className={SEC_H + " mb-1.5"}>模型</div>
-          <p className="text-[12px] text-muted mb-2.5 leading-relaxed">
-            Ticked models show in the composer's picker; the black badge marks the default for new
-            sessions.
-          </p>
+          {/* 产品说明移至代码：Ticked models show in the composer's picker; the black badge marks the default for new sessions. */}
           <ModelChecklist
             provider={ps.sel}
             knownProviders={knownNames}
@@ -328,9 +323,7 @@ export function ModelsTab() {
         (info?.suggested_models?.length || 0) > 0 && (
           <div className="mt-6" data-testid="model-preview">
             <div className={SEC_H + " mb-1.5"}>包含的模型</div>
-            <p className="text-[12px] text-muted mb-2.5 leading-relaxed">
-              Curated, agent-capable models this provider serves — add your key above to enable them.
-            </p>
+            {/* 产品说明移至代码：Curated, agent-capable models this provider serves — add your key above to enable them. */}
             <div className="space-y-1">
               {(info?.suggested_models || []).map((m) => {
                 const full = ps.sel === "openai" ? m : `${ps.sel}:${m}`;
@@ -376,10 +369,7 @@ function ComposerPickerCard({
   return (
     <div className="mt-6" data-testid="composer-picker">
       <div className={SEC_H + " mb-1.5"}>输入框模型选择器</div>
-      <p className="text-[12px] text-muted mb-2.5 leading-relaxed">
-        The models offered when starting a session; the black badge marks the default. Add more
-        from a provider's card above.
-      </p>
+      {/* 产品说明移至代码：The models offered when starting a session; the black badge marks the default. Add more from a provider's card above. */}
       <div className="mlist">
         {settings.models.map((id) => {
           const isDefault = id === settings.model;
@@ -1035,7 +1025,7 @@ export function ConnectSetup({
     const res = await connectConnector(c.name, values);
     setBusy(false);
     if (res.ok) onConnected();
-    else setError(res.error || "could not connect");
+    else setError(res.error || "连接失败，请重试。");
   };
 
   const oneClick = async () => {
@@ -1044,7 +1034,7 @@ export function ConnectSetup({
     // Completion arrives via the tab's poll: the broker form-POSTs the profile
     // to the sidecar, the connector flips to connected, this card closes itself.
     if (res.ok) setWaiting(true);
-    else setError(res.error || "could not start managed connect");
+    else setError(res.error || "暂时无法开始授权连接，请重试。");
   };
 
   const mcpOneClick = async () => {
@@ -1053,7 +1043,7 @@ export function ConnectSetup({
     // Completion likewise arrives via the poll — the sidecar flips the connector
     // to connected once the local OAuth flow lands.
     if (res.ok) setWaiting(true);
-    else setError(res.error || "could not start the connect");
+    else setError(res.error || "暂时无法开始连接，请重试。");
   };
 
   return (
@@ -1062,7 +1052,7 @@ export function ConnectSetup({
         /* MCP-backed one-click needs no cloud sign-in — the OAuth flow is local. */
         <div className="space-y-2" data-testid="mcp-connect">
           <button className={BTN_ACCENT} onClick={mcpOneClick} disabled={waiting}>
-            {waiting ? "Check your browser…" : `Connect ${c.title} with one click`}
+            {waiting ? "请在浏览器中完成授权…" : `一键连接 ${c.title}`}
           </button>
           {c.fields.length > 0 && (
             <div className="text-[11.5px] text-faint">或手动连接：</div>
@@ -1076,22 +1066,22 @@ export function ConnectSetup({
             // a visibly-parked button, and the manual path below stays fully live.
             <>
               <button className={BTN_ACCENT + " opacity-50"} disabled data-testid="managed-coming-soon">
-                {`Connect ${c.title} with one click`}
+                {`一键连接 ${c.title}`}
                 <span className="ml-2 text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-white/25">
-                  Coming soon
+                  即将开放
                 </span>
               </button>
               <div className="text-[11.5px] text-faint">
-                One-click sign-in is coming soon — connect manually below for now:
+                一键授权暂未开放，可在下方手动连接。
               </div>
             </>
           ) : cloud?.signed_in ? (
             <button className={BTN_ACCENT} onClick={oneClick} disabled={waiting}>
-              {waiting ? "Check your browser…" : `Connect ${c.title} with one click`}
+              {waiting ? "请在浏览器中完成授权…" : `一键连接 ${c.title}`}
             </button>
           ) : cloud ? (
             <CloudSignInInline
-              blurb={`Sign-in unlocks the one-click ${c.title} connect — or connect manually below.`}
+              blurb={`登录后可一键连接 ${c.title}，也可在下方手动连接。`}
             />
           ) : (
             // Status unknown (fetch pending/failed): never show the sign-in ask to a
@@ -1114,7 +1104,7 @@ export function ConnectSetup({
         <label className="conn-field" key={f.key}>
           <span className="conn-field-label">
             {f.label}
-            {!f.required && <em> (optional)</em>}
+            {!f.required && <em>（可选）</em>}
           </span>
           <input
             type={f.secret ? "password" : "text"}
@@ -1128,7 +1118,7 @@ export function ConnectSetup({
       ))}
       <div>
         <button className={BTN_ACCENT} onClick={submit} disabled={busy}>
-          {busy ? "Validating…" : "Connect"}
+          {busy ? "正在验证…" : "连接"}
         </button>
       </div>
       {error && <div className="text-[12.5px] text-danger">{error}</div>}

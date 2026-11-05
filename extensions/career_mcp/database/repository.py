@@ -22,6 +22,10 @@ class JobRepository:
     def acquire_source_lock(self, source_slug: str) -> bool:
         return True
 
+    def get_running_crawl_cycle(self, crawl_source_id: str) -> dict | None:
+        row = self.connection.execute("SELECT * FROM crawl_cycles WHERE source_id=? AND status='running'", (crawl_source_id,)).fetchone()
+        return dict(row) if row else None
+
     def get_or_create_crawl_cycle(
         self,
         crawl_source_id: str,
@@ -481,6 +485,17 @@ class JobRepository:
                 (job_id,),
             )
         ]
+        from ..services.job_changes import enrich
+        enrich(self.connection, [detail])
+        changes = [{"event_type": event["kind"], "summary": {"new": "连续完整采集之间新增", "updated": "岗位内容更新", "reopened": "岗位重新开放", "backfill": "初次采集或中断恢复，历史补录"}[event["kind"]], "changed_fields": [], "occurred_at": event["observed_at"]}
+                   for event in self.connection.execute("SELECT kind,observed_at FROM job_catalog_changes WHERE job_id=? ORDER BY julianday(observed_at) DESC", (job_id,))]
+        from ..services.job_changes import instant
+        from zoneinfo import ZoneInfo
+        event_day = lambda stamp: instant(stamp).astimezone(ZoneInfo("Asia/Shanghai")).date()
+        classified_days = {(event["event_type"], event_day(event["occurred_at"])) for event in changes}
+        legacy = [event for event in detail["events"] if event["event_type"] != "created" and
+                  ({"changed": "updated"}.get(event["event_type"], event["event_type"]), event_day(event["occurred_at"])) not in classified_days]
+        detail["catalog_events"] = sorted(legacy + changes, key=lambda event: instant(event["occurred_at"]), reverse=True)
         return detail
 
     def get_interview_input(self, job_id: str) -> dict | None:
@@ -531,6 +546,10 @@ class JobRepository:
             elif field in {"first_seen_at", "last_seen_at"} and op == "between":
                 clauses.append(f"julianday(j.{field})>=julianday(?) AND julianday(j.{field})<julianday(?)")
                 params.extend(values)
+            elif field in {"new_at", "updated_at", "reopened_at", "backfilled_at"} and op == "between":
+                kind = {"new_at": "new", "updated_at": "updated", "reopened_at": "reopened", "backfilled_at": "backfill"}[field]
+                clauses.append("j.id IN (SELECT job_id FROM job_catalog_changes WHERE kind=? GROUP BY job_id HAVING MAX(julianday(observed_at))>=julianday(?) AND MAX(julianday(observed_at))<julianday(?))")
+                params.extend([kind, *values])
         rows = self.connection.execute("""SELECT j.*, c.slug AS company_slug, c.name AS company_name,
             tracking.is_favorite AS tracking_is_favorite, tracking.application_status AS tracking_application_status,
             tracking.version AS tracking_version, tracking.updated_at AS tracking_updated_at,
@@ -538,7 +557,10 @@ class JobRepository:
             FROM jobs j JOIN companies c ON c.id=j.company_id LEFT JOIN job_tracking tracking ON tracking.job_id=j.id
             LEFT JOIN (SELECT job_id,MAX(occurred_at) AS reopened_at FROM job_events WHERE event_type='reopened' GROUP BY job_id) reopened ON reopened.job_id=j.id
             WHERE """ + " AND ".join(clauses), params).fetchall()
-        return [{**self._job_row(row), "reopened_at": row["reopened_at"]} for row in rows]
+        records = [{**self._job_row(row), "reopened_at": row["reopened_at"]} for row in rows]
+        from ..services.job_changes import enrich
+        enrich(self.connection, records)
+        return records
 
     def search_jobs(self, filters: JobSearchFilters) -> tuple[list[dict], int]:
         clauses = ["1 = 1"]

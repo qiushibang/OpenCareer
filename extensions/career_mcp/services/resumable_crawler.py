@@ -56,9 +56,9 @@ class ResumableCrawlerService:
                     "has_more": True,
                     "processed_pages": 0,
                 }
-            cycle = repository.get_or_create_crawl_cycle(
-                str(source["crawl_source_id"]),
-                adapter.initial_shards(),
+            running = getattr(repository, "get_running_crawl_cycle", lambda _: None)(str(source["crawl_source_id"]))
+            cycle = running or repository.get_or_create_crawl_cycle(
+                str(source["crawl_source_id"]), adapter.initial_shards(),
             )
             processed_pages = 0
             for shard in repository.list_cycle_shards(cycle["id"]):

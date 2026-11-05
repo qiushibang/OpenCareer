@@ -307,7 +307,7 @@ export function InterviewView({
 
   if (loading && !interview) {
     return (
-      <main className="grid h-full place-items-center text-sm text-muted">
+      <main className="oc-page oc-interview grid h-full place-items-center text-sm text-muted">
         正在读取模拟面试…
       </main>
     );
@@ -315,7 +315,7 @@ export function InterviewView({
 
   if (!interview) {
     return (
-      <main className="grid h-full place-items-center p-6">
+      <main className="oc-page oc-interview grid h-full place-items-center p-6">
         <div className="text-center">
           <p className="text-sm text-red-700">
             {error || "未找到这场模拟面试。"}
@@ -329,7 +329,7 @@ export function InterviewView({
   }
 
   return (
-    <main className="h-full overflow-y-auto bg-paper p-5">
+    <main className="oc-page oc-interview h-full overflow-y-auto bg-paper p-5">
       <section className="mx-auto max-w-3xl rounded-2xl border border-line bg-panel p-5">
         <header className="flex items-start justify-between gap-4">
           <div>
@@ -406,9 +406,7 @@ export function InterviewView({
               disabled={Boolean(pendingTurnId)}
               onChange={(event) => setDraft(event.target.value)}
             />
-            <p className="mt-2 text-xs text-muted">
-              语音不可用时仍可编辑并提交文字回答。
-            </p>
+            {/* 语音不可用时仍可编辑并提交文字回答；具体失败原因由 voiceError 呈现。 */}
             {!audioCaptureSupported && (
               <p className="mt-2 text-xs text-amber-700">
                 当前浏览器环境不支持安全录音，请使用 HTTPS

@@ -113,6 +113,8 @@ interface Props {
   onOpenCareerProfile: () => void;
   careerJobsActive: boolean;
   careerProfileActive: boolean;
+  onOpenCareerApplications?: () => void;
+  careerApplicationsActive?: boolean;
   // Collapse controls (⌘B / hover-peek). `onCollapse` docks/undocks; `onPeekLeave` hides the
   // floating peek when the pointer leaves the panel.
   collapsed?: boolean;
@@ -817,6 +819,7 @@ export function Sidebar(props: Props) {
             "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-left hover:bg-paper hover:text-ink " +
             (props.careerJobsActive ? "text-ink bg-paper" : "text-muted")
           }
+          aria-current={props.careerJobsActive?"page":undefined}
           data-testid="nav-career-jobs"
           onClick={props.onOpenCareerJobs}
         >
@@ -825,12 +828,14 @@ export function Sidebar(props: Props) {
         </button>
       </div>
 
+      {props.onOpenCareerApplications && <div className="px-2.5 mt-1"><button className={"w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-left hover:bg-paper hover:text-ink " + (props.careerApplicationsActive ? "text-ink bg-paper" : "text-muted")} onClick={props.onOpenCareerApplications} aria-current={props.careerApplicationsActive?"page":undefined} data-testid="nav-career-applications"><Icon name="table" size={15} className="shrink-0"/><span className="flex-1">求职进度</span></button></div>}
       <div className="px-2.5 mt-1">
         <button
           className={
             "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-left hover:bg-paper hover:text-ink " +
             (props.careerProfileActive ? "text-ink bg-paper" : "text-muted")
           }
+          aria-current={props.careerProfileActive?"page":undefined}
           data-testid="nav-career-profile"
           onClick={props.onOpenCareerProfile}
         >

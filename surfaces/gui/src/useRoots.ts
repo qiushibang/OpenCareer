@@ -35,7 +35,7 @@ export function useRoots(sessionId: string, reloadKey?: number) {
       window.dispatchEvent(new CustomEvent("coworker:roots-changed", { detail: sessionId }));
       return true;
     }
-    setError(res.error || "could not update directories");
+    setError(res.error || "暂时无法更新文件夹权限，请重试。");
     reload();
     return false;
   };

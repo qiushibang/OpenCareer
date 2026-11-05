@@ -285,12 +285,23 @@ describe("CareerJobsView", () => {
     expect(onStartInterview).not.toHaveBeenCalled();
   });
 
+  it("recovers a throttled job list after the requested delay", async () => {
+    arrange();
+    api.getCareerJobs.mockRejectedValueOnce(Object.assign(new Error("请求较多，请稍后重试。"),{retryAfterMs:1000}));
+    render(<CareerJobsView />);
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent",expect.stringContaining("自动重试"));
+    await waitFor(()=>expect(screen.queryByRole("alert")).toBeNull(),{timeout:2500});
+    expect(await screen.findByRole("heading",{name:"大模型算法工程师"})).toBeTruthy();
+    expect(api.getCareerJobs).toHaveBeenCalledTimes(2);
+  });
+
   it("loads active jobs and selects the first detail", async () => {
     arrange();
 
     const { container } = render(<CareerJobsView />);
 
     expect(await screen.findByText("大模型算法工程师")).toBeTruthy();
+    expect(screen.queryByRole("combobox", {name:"岗位状态"})).toBeNull();
     expect(api.getCareerJobs).toHaveBeenCalledWith(
       expect.objectContaining({
         status: "active",

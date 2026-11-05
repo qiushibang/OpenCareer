@@ -12,6 +12,7 @@ import {
   connectEvents,
   getSettings,
   isAlpha,
+  isLocal,
   getPersonas,
   getInbox,
   getUnattended,
@@ -70,8 +71,11 @@ import { ApprovalCard } from "./components/ApprovalCard";
 import { DirectoryRequestCard } from "./components/DirectoryRequestCard";
 import { PlanCard } from "./components/PlanCard";
 import { WorkspaceTrustPrompt } from "./components/WorkspaceTrustPrompt";
+import { SubscriptionChatIntro } from "./components/SubscriptionChatIntro";
+import { subscriptionChatTurn, type SubscriptionChatContext } from "./subscriptionChat";
 import { CareerWelcome } from "./components/CareerWelcome";
 import { CareerJobsView } from "./components/CareerJobsView";
+import { ApplicationsView } from "./components/ApplicationsView";
 import type { InterviewLaunchPayload } from "./components/CareerJobsView";
 import { CareerProfileView } from "./components/CareerProfileView";
 import { ConversationInterviewBar } from "./components/ConversationInterviewBar";
@@ -254,8 +258,9 @@ export function App() {
   // composer's "No model connected" chip. Default true so we don't flash the chip before settings
   // load; corrected by loadSettings.
   const [surface, setSurface] = useState<
-    "session" | "jobs" | "profile" | "scheduled" | "integrations" | "audit" | "inbox" | "persona" | "settings"
+    "session" | "jobs" | "applications" | "profile" | "scheduled" | "integrations" | "audit" | "inbox" | "persona" | "settings"
   >("session");
+  const [applicationOpenId,setApplicationOpenId] = useState<string|null>(null);
   useEffect(() => {
     const openCatalog = () => setSurface("jobs");
     window.addEventListener("opencareer:catalog-open", openCatalog);
@@ -297,7 +302,8 @@ export function App() {
     setSurface("persona");
   };
   const [browserRefreshKey, setBrowserRefreshKey] = useState(0);
-  const [railHidden, setRailHidden] = useState(false);
+  // Keep the empty inspector out of the primary task; artifacts can still open it explicitly.
+  const [railHidden, setRailHidden] = useState(true);
   const [isNarrow, setIsNarrow] = useState(
     () => window.matchMedia?.("(max-width: 768px)").matches ?? false,
   );
@@ -398,6 +404,7 @@ export function App() {
   // expanded sidebar owns its own instance; this one exists so search never disappears with it.
   const [searchOpen, setSearchOpen] = useState(false);
   // A pending composer prefill (text + attachments) pushed from the session start panel.
+  const [subscriptionGuide, setSubscriptionGuide] = useState<{sessionId:string;context:SubscriptionChatContext} | null>(null);
   const [composerPrefill, setComposerPrefill] = useState<{ text: string; attachments?: Attachment[]; nonce: number }>();
   const [resumeImportNonce, setResumeImportNonce] = useState(0);
   const openResumeImporter = () => {
@@ -1150,6 +1157,12 @@ export function App() {
     skill?: string,
     display?: string,
   ) => {
+    if (subscriptionGuide?.sessionId === sessionId && !skill) {
+      const turn = subscriptionChatTurn(text, subscriptionGuide.context);
+      send(turn.prompt, attachments, turn.skill, turn.display);
+      setSubscriptionGuide(null);
+      return;
+    }
     if (
       waitingForInterviewAnswer &&
       currentInterviewTurn &&
@@ -1217,7 +1230,9 @@ export function App() {
     // Knowledge family: a new conversation starts fresh (orphan) — clear the workspace so the
     // server provisions a NEW scratch dir for the new session id. Code keeps its repo.
     if (!gatesWorkspace(target)) setWorkspace(null);
-    setSessionId(newId());
+    const nextId = newId();
+    setSessionId(nextId);
+    return nextId;
   };
   const startResumeCoach = (payload: ResumeCoachLaunchPayload) => {
     setResumeCoachLaunchError("");
@@ -1555,6 +1570,7 @@ export function App() {
 
   return (
     <div
+      data-surface={surface}
       className={
         "app" +
         (overlay ? " tauri-overlay" : "") +
@@ -1564,6 +1580,7 @@ export function App() {
         (mobileNavOpen ? " mobile-nav-open" : "")
       }
     >
+      {isNarrow && surface!=="session" && <div className="mobile-surface-bar"><button aria-label="显示侧边栏" aria-expanded={mobileNavOpen} onClick={toggleNav}><Icon name="sidebar" size={18}/></button><span>{{jobs:"岗位雷达",applications:"求职进度",profile:"求职档案",settings:"设置",scheduled:"自动任务",integrations:"连接与工具",audit:"活动记录",inbox:"收件箱",persona:"Agent"}[surface]}</span></div>}
       {/* Dev-only fake traffic lights so ?overlay=1 previews the real desktop top-left. */}
       {simOverlay && (
         <div className="sim-traffic-lights" aria-hidden="true">
@@ -1622,7 +1639,7 @@ export function App() {
       {/* Explicit reveal affordance while collapsed (alongside hover-peek + ⌘B) — on every
           surface EXCEPT the session view, whose topbar carries the [sidebar][+][search] cluster
           instead (§22; no duplicate reveal buttons). */}
-      {effectiveNavCollapsed && !navPeek && surface !== "session" && (
+      {effectiveNavCollapsed && !isNarrow && !navPeek && surface !== "session" && (
         <button
           className="nav-reveal-btn"
           onClick={toggleNav}
@@ -1678,15 +1695,17 @@ export function App() {
         onDeleteSession={deleteConversation}
         onArchiveSession={toggleArchived}
         onTogglePin={togglePinned}
-        onManage={() => openSettings("appearance")}
+        onManage={() => {setMobileNavOpen(false);openSettings("appearance");}}
         onOpenPersona={(id) => {
           openPersona(id, "session");
         }}
         onManagePersonas={() => openSettings("personas")}
-        onOpenCareerJobs={() => setSurface("jobs")}
-        onOpenCareerProfile={() => setSurface("profile")}
+        onOpenCareerJobs={() => {setMobileNavOpen(false);setSurface("jobs");}}
+        onOpenCareerProfile={() => {setMobileNavOpen(false);setSurface("profile");}}
         careerJobsActive={surface === "jobs"}
         careerProfileActive={surface === "profile"}
+        onOpenCareerApplications={isLocal() ? () => {setMobileNavOpen(false);setApplicationOpenId(null);setSurface("applications");} : undefined}
+        careerApplicationsActive={surface === "applications"}
         collapsed={effectiveNavCollapsed}
         onCollapse={toggleNav}
         onPeekLeave={() => setNavPeek(false)}
@@ -1701,6 +1720,8 @@ export function App() {
       {surface === "jobs" ? (
         <>
           <CareerJobsView
+            onConfigureSubscription={context => {const id=startNewSession("career");setSubscriptionGuide({sessionId:id,context});prefillComposer("");}}
+            onOpenApplication={(id) => {setApplicationOpenId(id);setSurface("applications");}}
             onStartResumeCoach={startResumeCoach}
             onStartInterview={(payload) =>
               void startMockInterview(payload)
@@ -1723,6 +1744,8 @@ export function App() {
             </div>
           )}
         </>
+      ) : surface === "applications" ? (
+        <ApplicationsView initialId={applicationOpenId}/>
       ) : surface === "profile" ? (
         <CareerProfileView onImportResume={openResumeImporter} />
       ) : surface === "scheduled" ? (
@@ -1915,7 +1938,7 @@ export function App() {
             <div className="main-scroll" ref={scrollRef} onScroll={handleScroll}>
               {idle ? (
                 agent === "career" ? (
-                  <CareerWelcome
+                  subscriptionGuide?.sessionId === sessionId ? <SubscriptionChatIntro context={subscriptionGuide.context} onExample={prefillComposer}/> : <CareerWelcome
                     onPrefill={prefillComposer}
                     onImportResume={openResumeImporter}
                   />

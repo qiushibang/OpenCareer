@@ -35,7 +35,7 @@ def local_environment(data: Path, port: int, backend_port: int) -> dict[str, str
         "CAREER_PRIVATE_DIR": str(data / "private"),
         "OPENCAR_ALPHA_WORKSPACE": str(data / "workspace"),
         "OPENCAR_ALPHA_TEST": "1", "OPENCAR_HEADLESS": "1",
-        "OPENCAR_LOCAL_MODE": "1",
+        "OPENCAR_LOCAL_MODE": "1", "OPENCAR_LOCAL_ACCESS": "1",
         "OPENCAR_EXTRA_ORIGINS": f"http://127.0.0.1:{port}",
         "COWORKER_EXIT_WITH_PARENT": "1", "COWORKER_PARENT_PID": str(os.getpid()),
         "VITE_ALPHA_UI_PORT": str(port), "VITE_ALPHA_BACKEND_PORT": str(backend_port),
@@ -162,13 +162,15 @@ def run_local(args: argparse.Namespace) -> int:
     env = local_environment(data, args.port, args.backend_port)
     source_mode = getattr(args, "job_source", "shared")
     env["OPENCAR_LOCAL_JOB_SOURCE"] = source_mode
+    if getattr(args, "job_companies", None):
+        env["OPENCAR_LOCAL_JOB_COMPANIES"] = args.job_companies
     if getattr(args, "job_feed_url", None):
         from urllib.parse import urlsplit
         feed = urlsplit(args.job_feed_url)
         if feed.scheme != "https" or not feed.hostname or feed.username or feed.password or feed.query or feed.fragment or not feed.path.endswith("/"):
             raise ValueError("共享岗位地址必须是不含凭据或查询参数的 HTTPS 目录，以 / 结尾。")
         env["OPENCAR_PUBLIC_JOB_FEED_URL"] = args.job_feed_url
-    python = Path(sys.executable) if args.skip_install else install_dependencies(env, browser_sources=source_mode == "local")
+    python = Path(sys.executable) if args.skip_install else install_dependencies(env, browser_sources=True)
     prepare_workspace(data, python)
     gui = ROOT / "surfaces" / "gui"
     vite = gui / "node_modules" / "vite" / "bin" / "vite.js"
@@ -219,6 +221,7 @@ def main() -> int:
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--no-job-sync", action="store_true", help="关闭本次后台岗位采集（离线使用或测试）")
     parser.add_argument("--job-source", choices=("shared", "local"), default="shared", help="岗位来源：默认同步公共目录；local 在本机独立采集")
+    parser.add_argument("--job-companies", help="独立采集的公司标识，逗号分隔，例如 bytedance；未指定时采集全部已注册来源")
     parser.add_argument("--job-feed-url", help="自托管公共目录的 HTTPS 地址，以 / 结尾；不接受账号、密码或查询参数")
     parser.add_argument("--skip-install", action="store_true", help="Use the current Python and installed Node dependencies (development/CI only)")
     args = parser.parse_args()

@@ -30,12 +30,13 @@ export function AuditView() {
   }, []);
 
   return (
-    <main className="flex-1 min-w-0 flex bg-paper">
+    <main className="oc-page oc-audit flex-1 min-w-0 flex bg-paper">
       <div className="flex-1 min-w-0 overflow-y-auto hairline-scroll">
         <div className="max-w-4xl mx-auto px-7 py-6">
-          <PanelHead
+          {/* 页面背景说明：sub="Recent connector and browser tool activity. Arguments are sanitized before storage." */}
+<PanelHead
             title="活动记录"
-            sub="Recent connector and browser tool activity. Arguments are sanitized before storage."
+
           />
 
           <div className="flex items-center gap-2 flex-wrap mb-4">
@@ -43,12 +44,12 @@ export function AuditView() {
             <input className={INPUT} placeholder="连接器" value={connectorFilter} onChange={(e) => setConnectorFilter(e.target.value)} />
             <input className={INPUT} placeholder="工具" value={toolFilter} onChange={(e) => setToolFilter(e.target.value)} />
             <button className={BTN_ACCENT} onClick={refresh}>
-              Filter
+              筛选
             </button>
           </div>
 
           {events.length === 0 ? (
-            <div className={CARD + " p-4 text-[13px] text-muted"}>No audit events yet.</div>
+            <div className={CARD + " p-4 text-[13px] text-muted"}>暂无活动记录</div>
           ) : (
             <div className="space-y-2">
               {events.map((ev) => (

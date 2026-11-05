@@ -41,10 +41,7 @@ export function InboxConfigure() {
           the Inbox now (§28; previously with routing under Connectors, §26). */}
       <div className="mt-6" data-testid="unrouted-section">
         <h3 className="text-[14px] font-semibold mb-1">未路由消息</h3>
-        <p className="text-[12.5px] text-muted mb-3">
-          Inbound messages and background-turn failures nothing claimed — nothing vanishes
-          silently.
-        </p>
+        {/* 产品说明移至代码：Inbound messages and background-turn failures nothing claimed — nothing vanishes silently. */}
         <UnroutedTable />
       </div>
     </div>
@@ -150,9 +147,7 @@ function InboxRoutingCard() {
         )}
       </div>
       {missingSlackOwner && (
-        <p className="text-[11.5px] text-warnInk mt-2">
-          Choose an approval owner under Integrations → Slack before routing approvals here.
-        </p>
+        <p className="text-[11.5px] text-warnInk mt-2">{/* 产品说明移至代码：Choose an approval owner under Integrations → Slack before routing approvals here. */}请先在连接设置指定审批负责人。</p>
       )}
       {error && <p className="text-[11.5px] text-warnInk mt-2">{error}</p>}
     </div>
@@ -184,9 +179,7 @@ function DmRouteCard() {
   return (
     <div className={CARD + " p-4"}>
       <div className="font-semibold text-[13.5px] mb-1">私信</div>
-      <p className="text-[12px] text-muted mb-3">
-        Session that handles DMs to the bot. With none, DMs park under Unrouted below.
-      </p>
+      <p className="text-[12px] text-muted mb-3">{/* 产品说明移至代码：Session that handles DMs to the bot. With none, DMs park under Unrouted below. */}机器人私信交给此对话；未指定时留在未分配中。</p>
       <div className="flex items-center gap-2">
         <span className="text-muted shrink-0">
           <Icon name="chat" size={16} />

@@ -91,4 +91,4 @@ jobs:
           python -m pip install -e '.[dev]' playwright
           python -m playwright install --with-deps chromium
       - name: e2e
-        run: OPENCAR_TEST_LOCAL_BROWSER=1 python -m pytest tests/test_local_browser.py -q
+        run: OPENCAR_TEST_LOCAL_BROWSER=1 python -m pytest tests/test_local_browser.py tests/test_local_access_browser.py -q

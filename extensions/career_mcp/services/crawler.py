@@ -202,6 +202,10 @@ class CrawlerService:
         observed_ids = {
             job.external_job_id for job in normalized
         }
+        # Local additive event semantics; PostgreSQL deployment is unchanged.
+        from ..database.repository import JobRepository
+        from . import job_changes
+        before = job_changes.capture(repository.connection, str(source["crawl_source_id"])) if isinstance(repository, JobRepository) else None
         for job in normalized:
             stored = repository.find_crawled_job(
                 str(source["crawl_source_id"]),
@@ -243,6 +247,9 @@ class CrawlerService:
                     )
                 ] += 1
 
+        if before is not None and normalized:
+            job_changes.record(repository.connection, str(source["crawl_source_id"]), before,
+                               max((job.observed_at for job in normalized), key=job_changes.instant), origin="official_crawl")
         repository.complete_crawl_run(
             run_id,
             status="succeeded",
@@ -317,6 +324,10 @@ class CrawlerService:
         if not 1 <= limit <= 100:
             raise ValueError("limit must be between 1 and 100")
         with self._repository_session() as repository:
+            from ..database.repository import JobRepository
+            if isinstance(repository, JobRepository):
+                from .job_changes import digest
+                return {"events": digest(repository.connection, since="1970-01-01T00:00:00Z", until=self._format_utc(self._clock()), limit=limit)["samples"], "limit": limit}
             return {
                 "events": repository.list_recent_job_events(limit),
                 "limit": limit,
@@ -344,6 +355,10 @@ class CrawlerService:
                 occurred_after=started_at_iso,
                 sample_limit=sample_limit,
             )
+            from ..database.repository import JobRepository
+            if isinstance(repository, JobRepository):
+                from .job_changes import digest as classified_digest
+                digest["events"] = classified_digest(repository.connection, since=started_at_iso, until=self._format_utc(ended_at), limit=sample_limit)
             persisted_source_slugs = {
                 source["slug"]
                 for source in repository.list_crawl_sources()
@@ -407,6 +422,21 @@ class CrawlerService:
             "pending": pending,
             "items": source_items,
         }
+        # A company-scoped local worker has a different configured scope from
+        # the server registry. Do not call unrelated retained feed sources failed
+        # or pending just because they have no local crawl_runs.
+        from ..local_jobs import read_status
+        local = read_status(self.config)
+        if local.get("mode") == "local":
+            sources = local.get("sources", [])
+            digest["sources"] = {
+                "configured": len(sources),
+                "healthy": sum(source["status"] == "succeeded" for source in sources),
+                "failed": sum(source["status"] == "failed" for source in sources),
+                "pending": sum(source["status"] not in {"succeeded", "failed"} for source in sources),
+                "items": [{"source_slug": source["slug"], "source_name": source["name"], "last_run_status": source["status"], "last_run_at": source.get("last_success_at"), "observed_unique": source.get("observed_unique")}
+                          for source in sources if source["status"] != "succeeded"],
+            }
         return {
             "window": {
                 "started_at": started_at_iso,

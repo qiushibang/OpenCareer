@@ -162,7 +162,7 @@ class PublicCatalogSync:
             raise ValueError("active catalog count does not match snapshot")
         return rows
 
-    def _apply(self, descriptor: SourceDescriptor, rows: list[dict]) -> None:
+    def _apply(self, descriptor: SourceDescriptor, rows: list[dict], observed_at: str | None = None) -> None:
         connection = connect(self.config.database_path)
         try:
             connection.execute("PRAGMA journal_mode=WAL")
@@ -170,6 +170,10 @@ class PublicCatalogSync:
             connection.commit()
             connection.execute("BEGIN IMMEDIATE")
             source = repository.ensure_crawl_source(descriptor)
+            from . import job_changes
+            source_id = str(source["crawl_source_id"])
+            before = job_changes.capture(connection, source_id)
+            stamp = observed_at or (max((r["observed_at"] for r in rows), key=job_changes.instant) if rows else None)
             for row in rows:
                 # SQLite range queries use UTC ISO strings. PostgreSQL may export
                 # +08:00; preserving that spelling would shift daily event windows.
@@ -180,6 +184,10 @@ class PublicCatalogSync:
                                          "source_url", "observed_at", "location_raw", "recruitment_type")})
                 normalized = normalize_snapshot(descriptor.source_slug, snapshot)
                 old = repository.find_crawled_job(str(source["crawl_source_id"]), snapshot.external_job_id)
+                # Switching back to a shared feed must not roll back a newer
+                # direct official verification, content, or recruitment state.
+                if old is not None and job_changes.instant(old["last_seen_at"]) > job_changes.instant(row["observed_at"]):
+                    continue
                 if old is None:
                     job_id = repository.create_crawled_job(source, normalized)
                     # A first download is not the official first discovery date.
@@ -202,6 +210,8 @@ class PublicCatalogSync:
                      json.dumps(row["locations"], ensure_ascii=False), json.dumps(row["responsibilities"], ensure_ascii=False),
                      json.dumps(row["requirements"], ensure_ascii=False), job_id),
                 )
+            if stamp:
+                job_changes.record(connection, source_id, before, stamp, origin="public_snapshot")
             connection.commit()
         except Exception:
             connection.rollback()
@@ -253,7 +263,7 @@ class PublicCatalogSync:
                     result["unchanged"] += 1
                 else:
                     rows = self._rows(source)
-                    self._apply(self.descriptors[slug], rows)
+                    self._apply(self.descriptors[slug], rows, source.get("last_success_at"))
                     cache.setdefault("sources", {})[slug] = source["sha256"]
                     _save(self.cache_path, cache)
                 progress["status"] = "succeeded"

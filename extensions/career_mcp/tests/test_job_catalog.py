@@ -71,6 +71,32 @@ def test_product_operations_is_not_silently_classified_as_product_manager():
     assert classify({"title": "产品运营实习生", "description_raw": "协助运营"})["job_family"] == "operations"
 
 
+def test_product_intern_queries_are_rule_based_and_exclude_adjacent_roles(tmp_path):
+    config = CareerConfig(tmp_path / "career")
+    product_titles = ["AI产品实习生（评测方向）-豆包", "大模型策略产品（写作）实习生-豆包",
+                      "大模型策略产品实习生（办公方向）-豆包", "豆包AI大模型Agent评测产品实习生 - 火山方舟"]
+    other_titles = ["豆包AI大模型产品运营实习生", "产品设计实习生-豆包", "产品开发工程师实习生-豆包",
+                    "豆包AI大模型产品解决方案实习生", "产品（运营方向）实习生-豆包"]
+    rows = [JobSnapshot(str(i), title, "岗位职责：参与团队工作", f"https://jobs.example/{i}", "2026-10-29T01:00:00Z", "北京", "internship") for i,title in enumerate(product_titles + other_titles)]
+    CrawlerService(config).crawl(FakeAdapter("bytedance", rows))
+    def no_model(*args):
+        pytest.fail("explicit role titles must not need a model")
+    service = JobCatalog(config, semantic=no_model)
+    result = service.search({"all": [
+        {"field":"company", "op":"in", "values":["字节"]},
+        {"field":"locations", "op":"in", "values":["北京"]},
+        {"field":"recruitment_type", "op":"in", "values":["internship"]},
+        {"field":"business_line_candidates", "op":"in", "values":["豆包"]},
+        {"field":"job_family", "op":"in", "values":["product"]},
+    ]})
+    assert result["total"] == 4
+    assert {j["title"] for j in result["jobs"]} == set(product_titles)
+    assert result["semantic"]["model_calls"] == 0
+    evaluation = next(j for j in result["jobs"] if j["title"] == product_titles[0])
+    assert {"ai_product", "evaluation_product"} <= set(evaluation["classification"]["directions"])
+    assert all(e["origin"] == "rule" for j in result["jobs"] for e in j["match_evidence"])
+
+
 def test_ai_is_a_term_not_letters_inside_daily_or_training():
     record = classify({"title": "产品经理", "description_raw": "daily retail training"})
     assert "ai_product" not in record["directions"]
@@ -104,7 +130,9 @@ def test_reopening_preserves_identity_and_first_discovery_and_refreshes_classifi
     crawl.crawl(FakeAdapter("fixture", [reopened]))
     result = catalog_service.search()["jobs"][0]
     assert result["id"] == original["id"]
-    assert result["first_seen_at"] == original["first_seen_at"]
+    assert "first_seen_at" not in result
+    from extensions.career_mcp.services.jobs import JobService
+    assert JobService(config).get_job(original["id"])["first_seen_at"] == first.observed_at
     assert result["reopened_at"] == "2026-10-29T01:00:00Z"
     assert result["classification"]["job_family"] == "algorithm"
     assert result["tracking"]["is_favorite"] is True
@@ -121,10 +149,15 @@ def test_day_boundaries_are_applied_to_real_crawled_observation_times(tmp_path):
                 ("今日产品经理", "2026-10-28T16:00:00Z"),
                 ("明日产品经理", "2026-10-29T16:00:00Z"),
             ])]
-    CrawlerService(config).crawl(FakeAdapter("fixture", rows))
+    from dataclasses import replace
+    crawl = CrawlerService(config)
+    baseline = replace(rows[0], external_job_id="baseline", title="基线岗位", observed_at="2026-10-27T16:00:00Z")
+    crawl.crawl(FakeAdapter("fixture", [baseline]))
+    for i, row in enumerate(rows):
+        crawl.crawl(FakeAdapter("fixture", [replace(job, observed_at=row.observed_at) for job in [baseline, *rows[:i+1]]]))
     service = JobCatalog(config, clock=lambda: datetime(2026,10,29,2,tzinfo=timezone.utc))
     assert [j["title"] for j in service.search(today=True)["jobs"]] == ["今日产品经理"]
-    assert [j["title"] for j in service.search({"field": "first_seen_at", "op": "between", "values": ["2026-10-29", "2026-10-30"]})["jobs"]] == ["今日产品经理"]
+    assert [j["title"] for j in service.search({"field": "new_at", "op": "between", "values": ["2026-10-29T00:00:00+08:00", "2026-10-30T00:00:00+08:00"]})["jobs"]] == ["今日产品经理"]
 
 
 def test_semantic_limit_never_reports_partial_matches_as_global_total(tmp_path):

@@ -14,7 +14,8 @@ MAX_BODY_BYTES = 16 * 1024 * 1024
 class CloudBudget:
     """Bounded single-worker admission control; never stores request content or keys."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, request_limit: int = 180) -> None:
+        self._request_limit = request_limit
         self._lock = Lock()
         self._requests: OrderedDict[str, list[float]] = OrderedDict()
         self._active: Counter[tuple[str, str]] = Counter()
@@ -22,7 +23,7 @@ class CloudBudget:
     def allow_request(self, user_id: str, *, write: bool) -> bool:
         now = monotonic()
         with self._lock:
-            for suffix, maximum in (("all", 180), ("write", 30)):
+            for suffix, maximum in (("all", self._request_limit), ("write", 30)):
                 if suffix == "write" and not write:
                     continue
                 key = f"{user_id}:{suffix}"

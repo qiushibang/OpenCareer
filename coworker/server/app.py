@@ -235,7 +235,10 @@ def create_app(
     from functools import wraps
     from .cloud_security import CloudBudget, MAX_BODY_BYTES
 
-    cloud_budget = CloudBudget()
+    from . import local_access
+    # Several local tabs share one owner and poll independently. Keep a bounded
+    # local read allowance; public limits and the 30/min write cap stay intact.
+    cloud_budget = CloudBudget(request_limit=1200 if local_access.enabled() else 180)
     from extensions.support.diagnostics import DiagnosticStore, page_category
     from starlette.concurrency import run_in_threadpool
 
@@ -788,7 +791,7 @@ def create_app(
         return manager.session_connections_view(session_id, persona or None)
 
     @app.post("/v1/sessions/{session_id}/connections")
-    def set_session_connection(session_id: str, body: dict) -> dict[str, Any]:
+    async def set_session_connection(session_id: str, body: dict) -> dict[str, Any]:
         # §6: a session override. `clear` drops the override (inherit the persona default again);
         # otherwise set an explicit on/off. Return the refreshed view so the drawer can re-render.
         body = body or {}
@@ -801,6 +804,8 @@ def create_app(
             manager.session_connections.set(
                 session_id, connector, bool(body.get("enabled", False))
             )
+        from . import local_access
+        await local_access.refresh(manager,session_id)
         persona = str(body.get("persona", "")) or None
         return {
             "ok": True,
@@ -2092,7 +2097,13 @@ def create_app(
     # -- connectors (Slack / Telegram / …) --------------------------------------
     @app.get("/v1/connectors")
     def connectors_list() -> dict[str, Any]:
-        return {"connectors": manager.list_connectors()}
+        from . import local_access
+        rows=manager.list_connectors()
+        if local_access.enabled():
+            # The upstream broker is not bundled with the local edition. Keep
+            # native manual credentials and pinned MCP OAuth without dead sign-in UI.
+            rows=[{**row,"title":"浏览器" if row.get("name")=="browser" else row.get("title"),"managed":False,"tools":[tool for tool in row.get("tools",[]) if tool.get("name") not in local_access.HOST_EXEC_TOOLS]} for row in rows]
+        return {"connectors": rows}
 
     async def _refresh_listeners_if_two_way(name: str) -> None:
         # New/removed creds only take effect when the platform socket reconnects (Socket Mode
@@ -2119,6 +2130,10 @@ def create_app(
         )
         if result.get("ok"):
             await _refresh_listeners_if_two_way(name)
+            from . import local_access
+            if local_access.enabled():
+                for sid in list(manager._engines):
+                    await local_access.refresh(manager,sid)
         return result
 
     @app.post("/v1/connectors/{name}/mcp-connect")
@@ -2146,6 +2161,10 @@ def create_app(
         )
         result = manager.disconnect_connector(name)
         await _refresh_listeners_if_two_way(name)
+        from . import local_access
+        if local_access.enabled():
+            for sid in list(manager._engines):
+                await local_access.refresh(manager,sid)
         return result
 
     @app.post("/v1/connectors/slack/workspaces/{team_id}/disconnect")
@@ -2576,11 +2595,14 @@ def create_app(
         )
 
     @app.patch("/v1/connectors/{name}/tools")
-    def connector_tools_patch(name: str, body: dict) -> dict[str, Any]:
+    async def connector_tools_patch(name: str, body: dict) -> dict[str, Any]:
         enabled = (body or {}).get("enabled")
         if not isinstance(enabled, dict):
             return {"ok": False, "error": "enabled map required"}
-        return manager.update_connector_tools(name, enabled)
+        result=manager.update_connector_tools(name, enabled)
+        from . import local_access
+        await local_access.refresh_all(manager)
+        return result
 
     @app.post("/v1/connectors/{name}/allow")
     def connector_allow(name: str, body: dict) -> dict[str, Any]:
@@ -3149,7 +3171,7 @@ def create_app(
             # Public alpha exposes only the explicit Career product workflow. Shell,
             # general file, connector, crawler, deletion, and newly added MCP tools stay
             # unavailable until deliberately reviewed and added to the allowlist.
-            engine.registry.retain(alpha.conversation_tools())
+            engine.registry.retain(alpha.engine_tools(engine.registry,browser="browser" in manager.effective_connectors(session_id,"career")))
             engine.permissions.allowed_commands.clear()
             engine.permissions.auto_allow_tools.clear()
             engine.permissions.session_allow_tools.clear()
@@ -3581,6 +3603,8 @@ def create_app(
 
     from extensions.career_mcp.catalog_api import router as career_catalog_router
     app.include_router(career_catalog_router())
+    from extensions.career_mcp.applications_api import router as career_applications_router
+    app.include_router(career_applications_router())
     return app
 
 

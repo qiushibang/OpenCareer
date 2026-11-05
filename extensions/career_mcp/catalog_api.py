@@ -9,7 +9,7 @@ def router() -> APIRouter:
     routes = APIRouter(prefix="/v1/career")
 
     def services():
-        if os.environ.get("OPENCAR_LOCAL_MODE") != "1":
+        if os.environ.get("OPENCAR_LOCAL_MODE") != "1" or os.environ.get("DATABASE_URL"):
             raise HTTPException(404, "Local-only feature")
         from .services.job_catalog import JobCatalog
         from .services.catalog_semantic import configured_semantic
@@ -43,6 +43,22 @@ def router() -> APIRouter:
     def result(result_id: str):
         return run(lambda: services()[0].result(result_id))
 
+    def pairing():
+        from .services.feishu_pairing import FeishuPairing
+        return FeishuPairing(services()[1])
+
+    @routes.post("/job-subscriptions/feishu-pairing")
+    def begin_pairing():
+        return run(lambda: pairing().begin())
+
+    @routes.post("/job-subscriptions/feishu-pairing/{sid}/poll")
+    def poll_pairing(sid: str):
+        return run(lambda: pairing().poll(sid))
+
+    @routes.delete("/job-subscriptions/feishu-pairing/{sid}")
+    def cancel_pairing(sid: str):
+        return run(lambda: pairing().cancel(sid))
+
     @routes.get("/job-subscriptions")
     def subscriptions():
         return run(lambda: services()[1].list())
@@ -64,6 +80,10 @@ def router() -> APIRouter:
     @routes.delete("/job-subscriptions/channels/{channel_id}")
     def remove_channel(channel_id: str):
         return run(lambda: services()[1].remove_channel(channel_id))
+
+    @routes.post("/job-subscriptions/channels/{channel_id}/check")
+    def check_channel(channel_id: str):
+        return run(lambda: services()[1].check_channel(channel_id))
 
     @routes.post("/job-subscriptions/channels/{channel_id}/test")
     def test_channel(channel_id: str, body: dict = Body(...)):

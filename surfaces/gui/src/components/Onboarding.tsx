@@ -120,10 +120,7 @@ export function Onboarding({ onDone }: { onDone: (next?: "work" | "gallery" | "a
           <section data-testid="ob-step-model" className="flex-1 min-h-0 flex flex-col">
             {/* Persistent header — stays put while the region below swaps (§39). */}
             <h1 className="text-[19px] font-semibold">欢迎使用 OpenCareer<span className="beta-tag">BETA</span></h1>
-            <p className="text-[13px] text-muted mt-0.5 mb-4">
-              Pick a model provider to get started — OpenWorker runs on your own key, and your
-              key and your data stay on this computer.
-            </p>
+            <p className="text-[13px] text-muted mt-0.5 mb-4">{/* 产品说明移至代码：Pick a model provider to get started — OpenWorker runs on your own key, and your key and your data stay on this computer. */}密钥仅存本机；所选内容将发给模型服务商。</p>
 
             {!ps.sel ? (
               /* ---- the provider GALLERY ---- */
@@ -141,7 +138,7 @@ export function Onboarding({ onDone }: { onDone: (next?: "work" | "gallery" | "a
             <div className="flex items-center gap-3 pt-5">
               {!skipConfirm ? (
                 <button className="text-[12.5px] text-faint hover:text-muted" onClick={() => setSkipConfirm(true)}>
-                  Skip setup
+                  暂后设置
                 </button>
               ) : (
                 <span className="text-[12.5px] text-muted">
@@ -160,9 +157,7 @@ export function Onboarding({ onDone }: { onDone: (next?: "work" | "gallery" | "a
                 {ps.verify.state === "testing" ? "正在检查…" : "下一步"}
               </button>
             </div>
-            <p className="text-[11px] text-faint mt-3">
-              Models can be enabled or hidden anytime in Settings ▸ Models.
-            </p>
+            {/* 产品说明移至代码：Models can be enabled or hidden anytime in Settings ▸ Models. */}
           </section>
         )}
 
@@ -174,9 +169,7 @@ export function Onboarding({ onDone }: { onDone: (next?: "work" | "gallery" | "a
              Connect pill. The gated Google pair is ONE combined grayed row. */
           <section data-testid="ob-step-tools" className="flex-1 min-h-0 flex flex-col">
             <h1 className="text-[19px] font-semibold">连接常用工具</h1>
-            <p className="text-[13px] text-muted mt-0.5 mb-3">
-              Chat can only advise. Connected, your coworker does the actual work:
-            </p>
+            {/* 产品说明移至代码：Chat can only advise. Connected, your coworker does the actual work: */}
 
             <div className="flex-1 min-h-0 overflow-y-auto pr-1" data-testid="ob-tool-gallery">
               {TOOL_ROWS.map(({ name, benefit, detail }) => {
@@ -304,14 +297,11 @@ export function Onboarding({ onDone }: { onDone: (next?: "work" | "gallery" | "a
                   onClick={() => setStep(2)}
                   data-testid="ob-tools-skip"
                 >
-                  Continue without sign-in
+                  暂不登录，继续
                 </button>
               )}
             </div>
-            <p className="text-[11px] text-faint mt-3">
-              30+ more tools on the Connectors page — add or remove anytime. Tokens stay on
-              this computer.
-            </p>
+            {/* 产品说明移至代码：30+ more tools on the Connectors page — add or remove anytime. Tokens stay on this computer. */}
           </section>
         )}
 
@@ -361,9 +351,7 @@ export function Onboarding({ onDone }: { onDone: (next?: "work" | "gallery" | "a
             {/* The Specialist-coworkers gallery card and the per-session-scope line stay HIDDEN
                 (owner call 2026-07-12); the finish("gallery") plumbing remains for their return. */}
 
-            <p className="text-[11px] text-faint text-center mt-auto pt-5">
-              Replay this setup anytime: Settings ▸ Appearance ▸ Run setup again.
-            </p>
+            {/* 产品说明移至代码：Replay this setup anytime: Settings ▸ Appearance ▸ Run setup again. */}
           </section>
         )}
       </div>

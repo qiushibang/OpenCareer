@@ -1757,6 +1757,7 @@ export interface CareerJobDetail extends CareerJobSummary {
   requirements: string[];
   versions: CareerJobVersion[];
   events: CareerJobEvent[];
+  catalog_events?: CareerJobEvent[];
 }
 
 export interface CareerJobQuery {
@@ -1857,6 +1858,13 @@ export interface CareerInterviewResult {
   interview?: CareerInterviewSession | null;
 }
 
+function checkCareerJobsRateLimit(response: Response): void {
+  if (response.status !== 429) return;
+  const seconds = Number(response.headers.get("Retry-After"));
+  const retryAfterMs = (Number.isFinite(seconds) && seconds > 0 ? Math.min(60, Math.max(1, seconds)) : 60) * 1000;
+  throw Object.assign(new Error("请求较多，请稍后重试。"), { retryAfterMs });
+}
+
 export async function getCareerJobs(
   filters: CareerJobQuery = {},
 ): Promise<CareerJobsResult> {
@@ -1876,6 +1884,7 @@ export async function getCareerJobs(
     if (value !== undefined && value !== "") query.set(key, String(value));
   }
   const res = await fetch(`${httpBase()}/v1/career/jobs?${query.toString()}`);
+  checkCareerJobsRateLimit(res);
   return res.json();
 }
 
@@ -1883,6 +1892,7 @@ export async function getCareerJob(jobId: string): Promise<CareerJobResult> {
   const res = await fetch(
     `${httpBase()}/v1/career/jobs/${encodeURIComponent(jobId)}`,
   );
+  checkCareerJobsRateLimit(res);
   return res.json();
 }
 
@@ -2071,7 +2081,7 @@ export interface LocalJobSyncStatus {
   failed: number;
   total_sources: number;
   updated_at: number;
-  sources: { slug: string; name: string; status: string; checked_at: number; upstream_status?: string; last_success_at?: string | null }[];
+  sources: { slug: string; name: string; status: string; checked_at: number; upstream_status?: string; last_success_at?: string | null; observed_unique?: number; pass_number?: number }[];
 }
 
 export async function getLocalJobSync(): Promise<LocalJobSyncStatus> {
@@ -2090,6 +2100,7 @@ export async function getCareerJobFilters(): Promise<
   CareerJobFiltersResult
 > {
   const res = await fetch(`${httpBase()}/v1/career/jobs/filters`);
+  checkCareerJobsRateLimit(res);
   return res.json();
 }
 

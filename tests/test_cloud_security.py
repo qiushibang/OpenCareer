@@ -8,6 +8,15 @@ from fastapi.testclient import TestClient
 from coworker.server import SessionManager, create_app, alpha
 
 
+def test_local_polling_allowance_remains_bounded_and_does_not_raise_write_limit():
+    from coworker.server.cloud_security import CloudBudget
+    budget=CloudBudget(request_limit=1200)
+    assert all(budget.allow_request('reader',write=False) for _ in range(1200))
+    assert not budget.allow_request('reader',write=False)
+    assert all(budget.allow_request('writer',write=True) for _ in range(30))
+    assert not budget.allow_request('writer',write=True)
+
+
 @pytest.mark.parametrize("method,path", [
     ("POST", "/v1/skills"), ("PATCH", "/v1/skills/mock-interview"),
     ("DELETE", "/v1/skills/mock-interview"), ("POST", "/v1/skills/upload"),

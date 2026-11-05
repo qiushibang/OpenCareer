@@ -8,6 +8,7 @@ import { initTheme } from "./theme";
 import { platformOS } from "./tauri";
 import "./tailwind.css";
 import "./styles.css";
+import "./design-system.css";
 
 initTheme();
 installSafeBrowserDiagnostics();

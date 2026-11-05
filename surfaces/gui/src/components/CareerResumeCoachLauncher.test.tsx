@@ -159,7 +159,7 @@ describe("CareerResumeCoachLauncher", () => {
 
     expect(
       await screen.findByText(
-        "暂无已确认简历，请前往我的求职档案导入并确认简历。",
+        "请先导入并确认简历。",
       ),
     ).toBeTruthy();
     expect(

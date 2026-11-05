@@ -62,9 +62,9 @@ interface QuickTemplate {
 const TEMPLATES: QuickTemplate[] = [
   {
     key: "github",
-    title: "GitHub digest",
+    title: "GitHub 动态摘要",
     blurb: "Merged PRs and commits, posted to your team's Slack.",
-    cadence: "Weekly",
+    cadence: "每周",
     conns: [
       { name: "slack", why: "Where the digest posts" },
       { name: "github", why: "What the digest summarizes" },
@@ -81,9 +81,9 @@ const TEMPLATES: QuickTemplate[] = [
   },
   {
     key: "pipeline",
-    title: "Pipeline digest",
+    title: "销售进展摘要",
     blurb: "Deals that moved — and deals going quiet — posted to Slack.",
-    cadence: "Weekly",
+    cadence: "每周",
     conns: [
       { name: "slack", why: "Where the digest posts" },
       { name: "hubspot", why: "Pipeline and deal activity" },
@@ -99,9 +99,9 @@ const TEMPLATES: QuickTemplate[] = [
   },
   {
     key: "brief",
-    title: "Morning brief",
+    title: "早间日程",
     blurb: "Calendar and unread email, summarized before your day starts.",
-    cadence: "Daily",
+    cadence: "每天",
     conns: [
       { name: "google_calendar", why: "Today's meetings and gaps" },
       { name: "gmail", why: "What arrived overnight" },
@@ -116,9 +116,9 @@ const TEMPLATES: QuickTemplate[] = [
   },
   {
     key: "news",
-    title: "Morning news briefing",
+    title: "每日新闻",
     blurb: "A 5-bullet tech & world news digest, saved as markdown.",
-    cadence: "Daily",
+    cadence: "每天",
     conns: [],
     day: "daily",
     time: "08:00",
@@ -128,9 +128,9 @@ const TEMPLATES: QuickTemplate[] = [
   },
   {
     key: "inboxdigest",
-    title: "Inbox digest",
+    title: "邮件摘要",
     blurb: "One short digest of your unread email.",
-    cadence: "Weekdays",
+    cadence: "工作日",
     conns: [{ name: "gmail", why: "Your unread email" }],
     day: "weekdays",
     time: "09:00",
@@ -138,9 +138,9 @@ const TEMPLATES: QuickTemplate[] = [
   },
   {
     key: "cleanup",
-    title: "Folder cleanup",
+    title: "整理下载文件",
     blurb: "Sort recent Downloads into tidy folders by type.",
-    cadence: "Weekly",
+    cadence: "每周",
     conns: [],
     day: "fri",
     time: "17:30",
@@ -306,11 +306,11 @@ export function AutomationQuickstart({
   return (
     <div className="mb-4">
       <div className="text-[11px] uppercase tracking-[0.05em] text-faint mb-2.5">
-        Start from a template
+        选择任务模板
       </div>
       {/* Equal-height cards (owner ask 2026-07-12): 1fr rows + h-full — <button> grid items
           don't stretch like divs. */}
-      <div className="grid grid-cols-3 auto-rows-fr gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 auto-rows-fr gap-3">
         {TEMPLATES.map((t) => (
           <button
             key={t.key}
@@ -324,7 +324,7 @@ export function AutomationQuickstart({
             onClick={() => pick(t)}
           >
             <span className="text-[13.5px] font-semibold">{t.title}</span>
-            <span className="text-[12px] text-muted leading-relaxed flex-1">{t.blurb}</span>
+            {/* 模板详细说明保留在 t.blurb，选择后的配置区呈现具体执行范围。 */}
             <span className="flex items-center gap-1.5 mt-1">
               {t.conns.map((c) => {
                 const cs = connState(c.name);
@@ -344,7 +344,7 @@ export function AutomationQuickstart({
                 );
               })}
               <span className="text-[11px] text-faint ml-0.5">
-                {t.conns.length === 0 ? `No connections needed · ${t.cadence}` : t.cadence}
+                {t.conns.length === 0 ? `无需连接 · ${t.cadence}` : t.cadence}
               </span>
             </span>
           </button>
@@ -494,9 +494,7 @@ export function AutomationQuickstart({
                       }
                     />
                   </div>
-                  <p className="text-[11px] text-warnInk mt-1">
-                    The bot must be a member of the channel — invite @OpenWorker in Slack if it isn't.
-                  </p>
+                  <p className="text-[11px] text-warnInk mt-1">{/* 产品说明移至代码：The bot must be a member of the channel — invite @OpenWorker in Slack if it isn't. */}请先将机器人加入目标群。</p>
                 </>
               )}
               <label className={label}>When</label>

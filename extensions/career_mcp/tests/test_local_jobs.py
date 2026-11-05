@@ -73,6 +73,33 @@ def test_resumable_source_repeats_batches_until_commit(tmp_path):
     assert result["state"] == "completed" and result["completed"] == 1
 
 
+def test_shared_download_time_cannot_skip_official_verification(tmp_path):
+    import json
+    import time
+    config = CareerConfig(tmp_path)
+    (tmp_path / "local-job-sync.json").write_text(json.dumps({"mode":"shared", "sources":[{"slug":"good", "status":"succeeded", "checked_at":time.time()}]}))
+    sync = LocalJobSync(config, adapters=[Broken("good", [])], resumable_adapters=[], pause=0)
+    assert sync.run_cycle()["failed"] == 1
+
+
+def test_pending_full_scan_retains_progress_without_claiming_failure_or_success(tmp_path):
+    adapter = FakeAdapter("resumable", [])
+    sync = LocalJobSync(CareerConfig(tmp_path), adapters=[], resumable_adapters=[adapter], pause=0)
+    calls = []
+    def batch(_):
+        calls.append(True)
+        return {"status":"running", "has_more":True, "observed_unique":len(calls)*10, "pass_number":1}
+    sync.resumable.run_batch = batch
+    sync._publish_resumable = lambda *_: pytest.fail("partial cycle must not publish")
+    result = sync.run_cycle()
+    assert len(calls) == 12
+    assert result["state"] == "running" and result["pending"] == 1
+    assert result["failed"] == 0 and result["completed"] == 0
+    assert result["sources"][0]["observed_unique"] == 120
+    sync.run_cycle()
+    assert len(calls) == 24
+
+
 def test_interruption_preserves_source_checkpoint_and_retries_next_time(tmp_path):
     sync = LocalJobSync(CareerConfig(tmp_path), adapters=[FakeAdapter("good", [snapshot()])], resumable_adapters=[], pause=0)
     def interrupted(_adapter):

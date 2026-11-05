@@ -4,6 +4,7 @@ import {
   getCloudStatus,
   getConnectors,
   getSlackStatus,
+  isLocal,
   type CloudStatus,
   type Connector,
   type SlackStatus,
@@ -70,7 +71,9 @@ export function ConnectorsSection() {
 
   if (detail) {
     const c = connectors.find((x) => x.name === detail);
-    const Page = DETAIL_PAGES[detail];
+    // Local access grants outbound tools; inbound routing/allow-list controls
+    // belong to the desktop gateway and are not exposed by the local policy.
+    const Page = isLocal() && c?.two_way ? undefined : DETAIL_PAGES[detail];
     return (
       <div>
         <button
@@ -130,7 +133,7 @@ function GenericDetail({
           <h2 className="text-[20px] font-semibold tracking-tight leading-tight">{c.title}</h2>
           <div className="text-[12.5px] text-muted flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-ok" />
-            {c.account || (c.auth === "none" ? "Built in" : "Connected")}
+            {c.account || (c.auth === "none" ? "内置工具" : "已连接")}
           </div>
         </div>
         {c.auth !== "none" && (
@@ -142,7 +145,7 @@ function GenericDetail({
               onGone();
             }}
           >
-            Disconnect
+            断开连接
           </button>
         )}
       </div>
@@ -151,7 +154,7 @@ function GenericDetail({
         <ConnectorTools c={c} onChanged={onChanged} />
       </div>
 
-      {c.two_way && (
+      {c.two_way && !isLocal() && (
         <div className={GRP + " mt-4"}>
           <AllowlistBlock c={c} onChanged={onChanged} />
           <UnauthorizedBlock c={c} onChanged={onChanged} />

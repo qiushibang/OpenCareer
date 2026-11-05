@@ -50,6 +50,9 @@ def test_long_public_fields_cannot_exceed_channel_byte_budget():
     parts = render_batches("日报", [job], new_since="2026-10-28T16:00:00Z", prior_ids=None)
     assert all(len(p.encode()) <= 1600 for p in parts)
     assert "匹配 1 个岗位" in parts[0]
+    assert "【新增】" not in parts[0]
+    job["backfilled_at"] = "2026-10-29T00:00:00Z"
+    assert "【历史补录】" in render_batches("日报", [job], new_since="2026-10-28T16:00:00Z", prior_ids=None)[0]
     job.update(first_seen_at="2026-10-20T00:00:00Z", reopened_at="2026-10-29T00:00:00Z")
     assert "【重新开放】" in render_batches("日报", [job], new_since="2026-10-28T16:00:00Z", prior_ids=set())[0]
 

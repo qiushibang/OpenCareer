@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import re
 from collections.abc import Iterable
+from typing import Any
 
 
 ALPHA_ENV = "OPENCAR_ALPHA_TEST"
@@ -118,6 +119,9 @@ def blocks_http(method: str, path: str) -> bool:
     """Default-deny cloud routes, including newly added desktop controls."""
     if not enabled():
         return False
+    from . import local_access
+    if local_access.permits_http(method,path):
+        return False
     return not any(
         (method.upper() == allowed_method or method.upper() == "OPTIONS")
         and re.fullmatch(pattern + "/?", path)
@@ -153,12 +157,20 @@ _PUBLIC_HTTP_ROUTES = (
     ("GET", r"/v1/career/(profile|resumes|interviews|jobs|jobs/filters)"),
     ("GET", r"/v1/career/jobs/sync"),
     ("GET", r"/v1/career/catalog/(schema|status)"),
+    ("POST", r"/v1/career/job-subscriptions/feishu-pairing(/[a-f0-9]{48}/poll)?"),
+    ("DELETE", r"/v1/career/job-subscriptions/feishu-pairing/[a-f0-9]{48}"),
     ("GET", r"/v1/career/catalog/results/[a-f0-9]+"),
     ("POST", r"/v1/career/catalog/search"),
+    ("POST", r"/v1/career/applications(/query|/export)?"),
+    ("GET", r"/v1/career/applications/[a-f0-9-]{36}"),
+    ("PATCH", r"/v1/career/applications/[a-f0-9-]{36}"),
+    ("POST", r"/v1/career/applications/[a-f0-9-]{36}/interviews"),
+    ("PATCH", r"/v1/career/applications/[a-f0-9-]{36}/interviews/[a-f0-9-]{36}"),
+    ("DELETE", r"/v1/career/applications/[a-f0-9-]{36}/interviews/[a-f0-9-]{36}"),
     ("GET", r"/v1/career/job-subscriptions(/channels|/[a-f0-9]+/runs)?"),
     ("POST", r"/v1/career/job-subscriptions(/channels|/[a-f0-9]+/(activate|pause|preview))?"),
     ("DELETE", r"/v1/career/job-subscriptions/channels/[a-f0-9]+"),
-    ("POST", r"/v1/career/job-subscriptions/channels/[a-f0-9]+/test"),
+    ("POST", r"/v1/career/job-subscriptions/channels/[a-f0-9]+/(test|check)"),
     ("POST", r"/v1/career/job-subscriptions/runs/[a-f0-9]+/retry"),
     ("POST", r"/v1/career/jobs/sync"),
     ("GET", r"/v1/career/profile/(versions|original(/(content|download))?)"),
@@ -189,3 +201,9 @@ def permits_agent(agent: str) -> bool:
 def conversation_tools() -> set[str]:
     """Explicit product-tool allowlist for public alpha Career conversations."""
     return set(_CONVERSATION_TOOLS)
+
+
+def engine_tools(registry: Any, *, browser: bool = True) -> set[str]:
+    """Public allowlist remains fixed; local owner tools are explicitly scoped."""
+    from . import local_access
+    return local_access.tool_names(registry,browser=browser) if local_access.enabled() else conversation_tools()
