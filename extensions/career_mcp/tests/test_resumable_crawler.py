@@ -82,6 +82,30 @@ def test_default_batch_commits_small_checkpoints_before_fetching_more(tmp_path):
         assert db.execute("SELECT count(*) FROM jobs").fetchone()[0] == 0
 
 
+def test_completed_shard_checkpoint_survives_next_shard_timeout(tmp_path):
+    import pytest
+    class Adapter(_Adapter):
+        def initial_shards(self):
+            return [{"shard_key": key, "filters": {"location_code": key}} for key in ("a", "b")]
+        def fetch_page(self, filters, offset):
+            if filters["location_code"] == "b":
+                raise TimeoutError("next category is unavailable")
+            return ResumableListingPage(jobs=[_job("1")], total=1,
+                next_offset=1, complete=True, fingerprint="first-category")
+    config = CareerConfig(tmp_path)
+    service = ResumableCrawlerService(config)
+    adapter = Adapter({})
+    result = service.run_batch(adapter)
+    assert result["has_more"] and result["processed_pages"] == 1
+    with pytest.raises(TimeoutError):
+        service.run_batch(adapter, continuation_only=True)
+    with connect(config.database_path) as db:
+        assert [tuple(row) for row in db.execute("SELECT shard_key,status FROM crawl_cycle_shards ORDER BY shard_key")] == [
+            ("a", "complete"), ("b", "pending")]
+        assert db.execute("SELECT count(*) FROM crawl_cycle_jobs").fetchone()[0] == 1
+        assert db.execute("SELECT count(*) FROM jobs").fetchone()[0] == 0
+
+
 def test_resumable_crawler_checkpoints_without_partial_catalog_write(
     tmp_path,
 ):

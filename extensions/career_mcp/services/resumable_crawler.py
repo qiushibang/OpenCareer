@@ -226,7 +226,10 @@ class ResumableCrawlerService:
                             break
                     if shard["status"] == "complete":
                         break
-                if processed_pages >= self.max_pages_per_batch:
+                # Commit a finished category before opening another browser for
+                # the next one. Its network failure must not roll back this
+                # category's already verified pages.
+                if processed_pages:
                     break
             shards = repository.list_cycle_shards(cycle["id"])
             cycle_jobs = repository.list_cycle_jobs(cycle["id"])
