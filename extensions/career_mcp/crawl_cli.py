@@ -475,7 +475,7 @@ def main(argv: list[str] | None = None) -> int:
         "--resumable-batches",
         type=int,
         default=int(os.environ.get("CRAWL_RESUMABLE_BATCHES", "12")),
-        help="每个可续跑来源本次最多执行的 20 页批次数，默认 12",
+        help="每个可续跑来源本次最多执行的批次数（每批最多 5 页），默认 12",
     )
     parser.add_argument("--json", action="store_true", help="最后额外打印一行 JSON 汇总")
     parser.add_argument("--resumable-continuation", action="store_true",

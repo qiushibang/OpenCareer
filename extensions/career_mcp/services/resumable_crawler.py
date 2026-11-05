@@ -34,7 +34,7 @@ class ResumableCrawlerService:
         self,
         config: CareerConfig | None = None,
         *,
-        max_pages_per_batch: int = 20,
+        max_pages_per_batch: int = 5,
         repository_session=None,
     ) -> None:
         if not 1 <= max_pages_per_batch <= 100:

@@ -141,5 +141,5 @@ docker compose run --rm crawler once --from-cache
 普通来源每天刷新；大陆社招、校招的完整扫描可能跨越多个批次。`crawl_cli`
 退出码 3 表示尚有检查点待继续，不能视为完整更新成功。容器默认每 60 秒继续，
 进程重启也先查已有进度；完成后回到每日计划。`CRAWL_RESUME_SECONDS` 至少 10 秒，
-`CRAWL_RESUMABLE_BATCHES` 默认 12（每批最多 20 页）。未通过完整性核验的分页只进入
+`CRAWL_RESUMABLE_BATCHES` 默认 12（每批最多 5 页）。小批次及时保存检查点，减少单次网络失败回滚的页数。未通过完整性核验的分页只进入
 暂存区，不更新公共岗位状态。公共静态目录另由 `deploy/public-catalog/` 的导出任务发布。

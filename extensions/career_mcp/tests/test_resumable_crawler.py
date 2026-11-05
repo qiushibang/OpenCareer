@@ -69,6 +69,19 @@ def test_continuation_does_not_start_a_completed_or_absent_cycle(tmp_path):
     assert adapter.requested == []
 
 
+def test_default_batch_commits_small_checkpoints_before_fetching_more(tmp_path):
+    adapter = _Adapter({i: ResumableListingPage(
+        jobs=[_job(str(i))], total=20, next_offset=i + 1,
+        complete=False, fingerprint=f"page-{i}") for i in range(20)})
+    config = CareerConfig(tmp_path)
+    service = ResumableCrawlerService(config)
+    result = service.run_batch(adapter)
+    assert result["has_more"] is True and result["processed_pages"] == 5
+    with connect(config.database_path) as db:
+        assert db.execute("SELECT next_offset FROM crawl_cycle_shards").fetchone()[0] == 5
+        assert db.execute("SELECT count(*) FROM jobs").fetchone()[0] == 0
+
+
 def test_resumable_crawler_checkpoints_without_partial_catalog_write(
     tmp_path,
 ):
