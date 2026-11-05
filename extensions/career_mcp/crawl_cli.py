@@ -231,7 +231,7 @@ def _select_adapters(only: str | None, skip: str | None) -> list[JobAdapter]:
     return sorted(adapters, key=lambda a: a.descriptor.source_slug)
 
 
-def _run_resumable_batches(batch_count: int) -> int:
+def _run_resumable_batches(batch_count: int, *, continuation_only: bool = False) -> int:
     if batch_count < 1:
         raise ValueError("resumable batch count must be positive")
     try:
@@ -253,10 +253,11 @@ def _run_resumable_batches(batch_count: int) -> int:
             repository_session=repository_session,
         )
         failed = False
+        pending = False
         for adapter in default_resumable_adapters():
             for _ in range(batch_count):
                 try:
-                    progress = service.run_batch(adapter)
+                    progress = service.run_batch(adapter, continuation_only=continuation_only)
                 except Exception as exc:
                     failed = True
                     _log(
@@ -268,6 +269,8 @@ def _run_resumable_batches(batch_count: int) -> int:
                     f"RESUME {adapter.source_slug}: "
                     + json.dumps(progress, ensure_ascii=False)
                 )
+                if progress["status"] == "idle":
+                    break
                 if progress["status"] in {
                     "committed",
                     "degraded",
@@ -275,7 +278,11 @@ def _run_resumable_batches(batch_count: int) -> int:
                 }:
                     failed = failed or progress["status"] != "committed"
                     break
-        return 1 if failed else 0
+            else:
+                pending = pending or bool(progress.get("has_more"))
+        # Pending work is not a completed refresh. The scheduler must resume it
+        # shortly rather than silently sleeping until tomorrow.
+        return 1 if failed else 3 if pending else 0
     finally:
         runtime.close()
 
@@ -471,6 +478,8 @@ def main(argv: list[str] | None = None) -> int:
         help="每个可续跑来源本次最多执行的 20 页批次数，默认 12",
     )
     parser.add_argument("--json", action="store_true", help="最后额外打印一行 JSON 汇总")
+    parser.add_argument("--resumable-continuation", action="store_true",
+                        help="只推进已有采集批次，不重新启动已完成来源")
     args = parser.parse_args(argv)
 
     if args.list:
@@ -482,7 +491,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{d.source_slug:<28} {d.company_name:<12} {d.adapter_type:<10} {d.base_url or '-'}")
         return 0
     if args.resumable_only:
-        return _run_resumable_batches(args.resumable_batches)
+        return _run_resumable_batches(args.resumable_batches,
+                                      continuation_only=args.resumable_continuation)
 
     adapters = _select_adapters(args.only, args.skip)
     if not adapters:

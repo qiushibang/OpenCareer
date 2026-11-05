@@ -60,6 +60,35 @@ def test_first_download_is_complete_idempotent_and_preserves_tracking(tmp_path):
     assert "私有申请备注" not in (root / "manifest.json").read_text()
 
 
+def test_republished_old_source_remains_stale_until_actual_crawl(tmp_path):
+    from datetime import datetime, timezone
+    from extensions.career_mcp.public_catalog_format import catalog_freshness
+    feed, config = tmp_path / "feed", CareerConfig(tmp_path / "client")
+    old = "2026-08-21T00:00:00Z"
+    fresh = "2026-11-05T08:00:00Z"
+    def export(stamp, rows):
+        return publish_stream(iter([
+            {"kind": "source", "descriptor": asdict(DESCRIPTOR), "expected_count": len(rows),
+             "last_success_at": stamp, "latest_status": "succeeded"},
+            *({"kind": "job", "job": row} for row in rows),
+            {"kind": "end_source"}, {"kind": "end_feed"}]), feed)
+    manifest = export(old, [job(observed_at=old)])
+    assert catalog_freshness(manifest, now=datetime(2026, 11, 5, 9, tzinfo=timezone.utc))["stale_source_count"] == 1
+    syncer(config, feed).run()
+    original = JobService(config).search_jobs()["jobs"][0]
+    tracking = JobTrackingService(config)
+    tracking.update(original["id"], {"expected_version": 0, "note": "保留旧申请"})
+    assert original["last_seen_at"].startswith("2026-08-21")
+    manifest = export(fresh, [job(observed_at=fresh), job("new", observed_at=fresh)])
+    assert catalog_freshness(manifest, now=datetime(2026, 11, 5, 9, tzinfo=timezone.utc))["stale_sources"] == []
+    assert syncer(config, feed).run()["completed"] == 1
+    jobs = JobService(config).search_jobs()["jobs"]
+    assert len(jobs) == 2 and all(row["last_seen_at"].startswith("2026-11-05") for row in jobs)
+    assert tracking.get(original["id"])["note"] == "保留旧申请"
+    # A brand-new install consumes the same updated directory, without history.
+    assert syncer(CareerConfig(tmp_path / "new-install"), feed).run()["completed"] == 1
+
+
 def test_upstream_comparisons_and_older_feed_cannot_rollback_local_verification(tmp_path):
     from extensions.career_mcp.database.migrations import connect, migrate
     from extensions.career_mcp.domain.crawler import JobSnapshot

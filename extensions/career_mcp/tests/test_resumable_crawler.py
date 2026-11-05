@@ -60,6 +60,15 @@ class _Adapter:
         return self.pages[offset]
 
 
+def test_continuation_does_not_start_a_completed_or_absent_cycle(tmp_path):
+    adapter = _Adapter({})
+    adapter.initial_shards = lambda: (_ for _ in ()).throw(AssertionError("must not fetch metadata"))
+    service = ResumableCrawlerService(CareerConfig(tmp_path))
+    result = service.run_batch(adapter, continuation_only=True)
+    assert result["status"] == "idle" and result["has_more"] is False
+    assert adapter.requested == []
+
+
 def test_resumable_crawler_checkpoints_without_partial_catalog_write(
     tmp_path,
 ):
@@ -103,7 +112,7 @@ def test_resumable_crawler_checkpoints_without_partial_catalog_write(
         ).fetchone()[0] == 1
 
     adapter.initial_shards = lambda: (_ for _ in ()).throw(AssertionError("checkpoint must not depend on refetching metadata"))
-    second = service.run_batch(adapter)
+    second = service.run_batch(adapter, continuation_only=True)
 
     assert second["status"] == "running"
     assert adapter.requested[-1] == (
@@ -115,8 +124,8 @@ def test_resumable_crawler_checkpoints_without_partial_catalog_write(
             "SELECT COUNT(*) FROM jobs"
         ).fetchone()[0] == 0
 
-    third = service.run_batch(adapter)
-    fourth = service.run_batch(adapter)
+    third = service.run_batch(adapter, continuation_only=True)
+    fourth = service.run_batch(adapter, continuation_only=True)
 
     assert third["status"] == "running"
     assert fourth["status"] == "committed"

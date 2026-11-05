@@ -79,6 +79,23 @@ def encoded(value: object) -> bytes:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
+def catalog_freshness(manifest: dict, *, now: datetime | None = None,
+                      max_age_hours: int = 48) -> dict:
+    """Operational health uses official crawl times, never file publication time.
+
+    Keep the wire format compatible and put diagnostics in publisher logs so a
+    successful export cannot silently hide a stalled upstream collector.
+    """
+    now = now or datetime.now(timezone.utc)
+    stale = []
+    for source in manifest["sources"]:
+        stamp = source.get("last_success_at")
+        if stamp is None or (now - datetime.fromisoformat(stamp.replace("Z", "+00:00"))).total_seconds() > max_age_hours * 3600:
+            stale.append(source["descriptor"]["source_slug"])
+    return {"stale_source_count": len(stale), "stale_sources": stale,
+            "freshness_max_age_hours": max_age_hours}
+
+
 def publish_stream(records, output: Path) -> dict:
     """Publish only after an entire, counted export ends successfully.
 
@@ -192,4 +209,5 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     result = publish_stream((json.loads(line) for line in sys.stdin if line.strip()), args.output)
-    print(json.dumps({k: result[k] for k in ("revision", "job_count", "active_count")}), flush=True)
+    print(json.dumps({**{k: result[k] for k in ("revision", "job_count", "active_count")},
+                      **catalog_freshness(result)}), flush=True)

@@ -42,11 +42,7 @@ class PostgresCatalogRepository:
         ).fetchone()
         return bool(row and row[0])
 
-    def get_or_create_crawl_cycle(
-        self,
-        crawl_source_id: str,
-        shards: list[dict],
-    ) -> dict:
+    def get_running_crawl_cycle(self, crawl_source_id: str) -> dict | None:
         row = self.connection.execute(
             """
             SELECT id, source_id, status, pass_number,
@@ -57,8 +53,16 @@ class PostgresCatalogRepository:
             """,
             (crawl_source_id,),
         ).fetchone()
-        if row is not None:
-            return _cycle_row(row)
+        return _cycle_row(row) if row is not None else None
+
+    def get_or_create_crawl_cycle(
+        self,
+        crawl_source_id: str,
+        shards: list[dict],
+    ) -> dict:
+        running = self.get_running_crawl_cycle(crawl_source_id)
+        if running is not None:
+            return running
         now = self._now()
         cycle_id = str(uuid.uuid4())
         self.connection.execute(

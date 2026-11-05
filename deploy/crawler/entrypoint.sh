@@ -14,6 +14,11 @@ AT="${CRAWL_AT:-04:00}"
 JITTER_MINUTES="${CRAWL_JITTER_MINUTES:-25}"
 RUN_ON_START="${CRAWL_RUN_ON_START:-0}"
 RESUMABLE_BATCHES="${CRAWL_RESUMABLE_BATCHES:-12}"
+RESUME_SECONDS="${CRAWL_RESUME_SECONDS:-60}"
+# On restart discover persisted checkpoints before waiting for the daily run.
+resume_code=3
+case "$RESUME_SECONDS" in *[!0-9]*|'') echo 'CRAWL_RESUME_SECONDS must be a positive integer' >&2; exit 2;; esac
+[ "$RESUME_SECONDS" -ge 10 ] || { echo 'CRAWL_RESUME_SECONDS must be at least 10' >&2; exit 2; }
 
 # 允许直接把参数当命令跑，方便手动介入：
 #   docker compose run --rm crawler once --only tencent-wxg-experienced
@@ -57,14 +62,19 @@ run_once() {
       echo "[crawler] 本轮抓取异常退出（code=$code）" >&2
     fi
   fi
+  resume_sources
+}
+
+resume_sources() {
+  resume_code=0
   if [ -n "${DATABASE_URL:-}" ]; then
     if python -m extensions.career_mcp.crawl_cli \
       --resumable-only \
-      --resumable-batches "$RESUMABLE_BATCHES"; then
-      echo "[crawler] 字节全量来源本批续跑完成"
+      --resumable-batches "$RESUMABLE_BATCHES" "$@"; then
+      echo "[crawler] 字节全量来源已完成，无待续跑批次"
     else
-      code=$?
-      echo "[crawler] 字节全量来源续跑未完成（code=$code），下轮从 checkpoint 继续" >&2
+      resume_code=$?
+      echo "[crawler] 字节全量来源尚未完成（code=${resume_code}），保留 checkpoint 并定时续跑" >&2
     fi
   fi
 }
@@ -100,15 +110,30 @@ if [ "$MODE" = "once" ]; then
   exit 0
 fi
 
-echo "[crawler] 调度已启动：每天 $AT（+0~${JITTER_MINUTES}min 抖动），时区 ${TZ:-UTC}"
+echo "[crawler] 调度已启动：每天 ${AT}（+0~${JITTER_MINUTES}min 抖动），时区 ${TZ:-UTC}"
 if [ "$RUN_ON_START" = "1" ]; then
   echo "[crawler] CRAWL_RUN_ON_START=1，先立即跑一轮"
   run_once
 fi
 
+delay="$(seconds_until)"
+next_regular=$(($(date +%s) + delay))
 while true; do
-  delay="$(seconds_until)"
+  now=$(date +%s)
+  delay=$((next_regular - now))
+  if [ "$delay" -le 0 ]; then
+    run_once
+    delay="$(seconds_until)"
+    next_regular=$(($(date +%s) + delay))
+  fi
+  # Regular sources keep their daily schedule; incomplete mainland scans get
+  # their own short continuation interval, including after process restart.
+  if [ -n "${DATABASE_URL:-}" ] && [ "$resume_code" -ne 0 ]; then
+    [ "$delay" -le "$RESUME_SECONDS" ] || delay="$RESUME_SECONDS"
+  fi
   echo "[crawler] 下一轮在 $((delay / 60)) 分钟后（约 $(date -d "+${delay} seconds" '+%Y-%m-%d %H:%M' 2>/dev/null || echo '?')）"
   sleep "$delay"
-  run_once
+  if [ -n "${DATABASE_URL:-}" ] && [ "$resume_code" -ne 0 ]; then
+    resume_sources --resumable-continuation
+  fi
 done

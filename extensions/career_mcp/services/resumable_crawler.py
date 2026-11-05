@@ -45,7 +45,7 @@ class ResumableCrawlerService:
         self.max_pages_per_batch = max_pages_per_batch
         self._injected_repository_session = repository_session
 
-    def run_batch(self, adapter) -> dict:
+    def run_batch(self, adapter, *, continuation_only: bool = False) -> dict:
         tail_verification: dict[str, int] | None = None
         with self._repository_session() as repository:
             source = repository.ensure_crawl_source(adapter.descriptor)
@@ -57,6 +57,11 @@ class ResumableCrawlerService:
                     "processed_pages": 0,
                 }
             running = getattr(repository, "get_running_crawl_cycle", lambda _: None)(str(source["crawl_source_id"]))
+            # Between daily refreshes, resume checkpoints without starting a new
+            # cycle for sources which have already finished.
+            if continuation_only and running is None:
+                return {"source_slug": adapter.source_slug, "status": "idle", "has_more": False,
+                        "processed_pages": 0}
             cycle = running or repository.get_or_create_crawl_cycle(
                 str(source["crawl_source_id"]), adapter.initial_shards(),
             )

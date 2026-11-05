@@ -221,7 +221,7 @@ def test_cli_runs_bounded_resumable_batches(monkeypatch) -> None:
         def __init__(self, **kwargs):
             calls.append(("init", kwargs))
 
-        def run_batch(self, adapter):
+        def run_batch(self, adapter, **kwargs):
             calls.append(("run", adapter.source_slug))
             return {
                 "source_slug": adapter.source_slug,
@@ -281,6 +281,60 @@ def test_cli_runs_bounded_resumable_batches(monkeypatch) -> None:
     assert runtime.closed is True
 
 
+def test_resumable_pending_is_not_reported_as_success(monkeypatch):
+    from types import SimpleNamespace
+    runtime = SimpleNamespace(mode="postgres", database=_Database(object()), close=lambda: None)
+    monkeypatch.setattr(crawl_cli, "build_storage_runtime", lambda: runtime)
+    monkeypatch.setattr(crawl_cli, "default_resumable_adapters",
+                        lambda: [SimpleNamespace(source_slug="bytedance-mainland-social")])
+    calls = []
+    class Service:
+        def __init__(self, **kwargs): pass
+        def run_batch(self, adapter, **kwargs):
+            calls.append(kwargs)
+            return {"status": "running", "has_more": True}
+    monkeypatch.setattr(crawl_cli, "ResumableCrawlerService", Service)
+    assert crawl_cli.main(["--resumable-only", "--resumable-batches", "2",
+                           "--resumable-continuation"]) == 3
+    assert calls == [{"continuation_only": True}] * 2
+
+
+def test_resumable_continuation_skips_idle_sources(monkeypatch):
+    from types import SimpleNamespace
+    runtime = SimpleNamespace(mode="postgres", database=_Database(object()), close=lambda: None)
+    monkeypatch.setattr(crawl_cli, "build_storage_runtime", lambda: runtime)
+    monkeypatch.setattr(crawl_cli, "default_resumable_adapters",
+                        lambda: [SimpleNamespace(source_slug="bytedance-mainland-campus")])
+    calls = []
+    class Service:
+        def __init__(self, **kwargs): pass
+        def run_batch(self, adapter, **kwargs):
+            calls.append(kwargs)
+            return {"status": "idle", "has_more": False}
+    monkeypatch.setattr(crawl_cli, "ResumableCrawlerService", Service)
+    assert crawl_cli.main(["--resumable-only", "--resumable-continuation"]) == 0
+    assert len(calls) == 1
+
+
+def test_postgres_checkpoint_lookup_supports_continuation_without_metadata():
+    from types import SimpleNamespace
+    from extensions.career_mcp.database.postgres_catalog_repository import PostgresCatalogRepository
+    queries = []
+    row = ("cycle-1", "source-1", "running", 2, None, SNAPSHOT.observed_at,
+           SNAPSHOT.observed_at, None, None)
+    class Connection:
+        def execute(self, sql, args):
+            queries.append((sql, args))
+            return SimpleNamespace(fetchone=lambda: row)
+    repository = PostgresCatalogRepository(Connection())
+    running = repository.get_running_crawl_cycle("source-1")
+    assert running["id"] == "cycle-1" and running["pass_number"] == 2
+    assert repository.get_or_create_crawl_cycle("source-1", []) == running
+    assert all("status = 'running'" in sql and args == ("source-1",) for sql, args in queries)
+    row = None
+    assert repository.get_running_crawl_cycle("source-1") is None
+
+
 def test_crawler_entrypoint_runs_resumable_batches_after_regular_crawl(
     tmp_path: Path,
 ) -> None:
@@ -318,3 +372,43 @@ def test_crawler_entrypoint_runs_resumable_batches_after_regular_crawl(
             "--resumable-batches 7"
         ),
     ]
+
+
+def test_crawler_restart_resumes_pending_before_next_daily_run(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    calls = tmp_path / "calls"
+    scripts = {
+        "python": '''#!/bin/sh
+case "$*" in
+  *--resumable-only*)
+    echo "$*" >> "$CALLS_PATH"
+    count=$(wc -l < "$CALLS_PATH")
+    [ "$count" -gt 1 ] && exit 0
+    exit 3;;
+  *) echo 3600;;
+esac
+''',
+        "sleep": '''#!/bin/sh
+echo "sleep $*" >> "$SLEEPS_PATH"
+count=$(wc -l < "$SLEEPS_PATH")
+[ "$count" -gt 2 ] && exit 99
+exit 0
+''',
+    }
+    for name, content in scripts.items():
+        path = bin_dir / name
+        path.write_text(content)
+        path.chmod(0o755)
+    sleeps = tmp_path / "sleeps"
+    result = subprocess.run(["sh", "deploy/crawler/entrypoint.sh"],
+        env={**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}",
+             "DATABASE_URL": "postgresql://fixture/catalog", "CRAWL_RUN_ON_START": "0",
+             "CALLS_PATH": str(calls), "SLEEPS_PATH": str(sleeps), "CRAWL_RESUME_SECONDS": "60"},
+        capture_output=True, text=True, timeout=10, check=False)
+    assert result.returncode == 99
+    assert len(calls.read_text().splitlines()) == 2
+    assert all("--resumable-continuation" in call for call in calls.read_text().splitlines())
+    waits = sleeps.read_text().splitlines()
+    assert waits[:2] == ["sleep 60", "sleep 60"]
+    assert int(waits[2].split()[1]) > 60  # completed: return to daily schedule
