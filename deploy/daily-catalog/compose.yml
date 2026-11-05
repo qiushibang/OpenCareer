@@ -1,0 +1,31 @@
+# Independent project: no website service, production DB, port, or tunnel mount.
+name: opencareer-daily-catalog
+services:
+  collector:
+    build:
+      context: ../..
+      dockerfile: deploy/crawler/Dockerfile
+    entrypoint: ["python", "-m", "extensions.career_mcp.daily_catalog"]
+    command: ["--data-dir", "/collector", "--output", "/feed"]
+    environment:
+      TZ: Asia/Shanghai
+      OPENCAR_HEADLESS: "1"
+      COWORKER_STATE_DIR: /collector/runtime
+      HOME: /collector/home
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - collector-data:/collector
+      - ${PUBLIC_CATALOG_OUTPUT:-./feed}:/feed
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    shm_size: 256m
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 256
+volumes:
+  collector-data:

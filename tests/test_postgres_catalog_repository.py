@@ -249,3 +249,22 @@ def test_postgres_catalog_creates_tenant_owned_manual_job() -> None:
     sql = "\n".join(call[0] for call in connection.calls)
     assert "INSERT INTO career.manual_job_owners" in sql
     assert any("alice" in params for _, params in connection.calls)
+
+
+def test_unchanged_checkpoint_refreshes_serialized_observation_too():
+    import json
+    connection=_Connection();connection.responses=[_Rows([('same-content',1)])]
+    repository=PostgresCatalogRepository(connection)
+    snapshot={'external_job_id':'1','observed_at':'2026-11-05T01:00:00Z','title':'产品经理'}
+    assert repository.stage_cycle_job('cycle',external_job_id='1',snapshot=snapshot,
+        content_hash='same-content',pass_number=2,observed_at=snapshot['observed_at'])=='unchanged'
+    sql,params=connection.calls[-1]
+    assert 'snapshot_json = %s::jsonb' in sql
+    assert json.loads(params[2])['observed_at']==snapshot['observed_at']
+
+
+def test_legacy_checkpoint_read_uses_recorded_observation_not_serialized_old_copy():
+    connection=_Connection();stamp=datetime(2026,11,5,1,tzinfo=timezone.utc)
+    connection.responses=[_Rows([('cycle','1',{'observed_at':'2026-08-01T00:00:00Z'},'hash',1,3,stamp)])]
+    row=PostgresCatalogRepository(connection).list_cycle_jobs('cycle')[0]
+    assert row['snapshot']['observed_at']==stamp.isoformat()

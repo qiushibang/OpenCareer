@@ -8,9 +8,11 @@ from io import BytesIO
 import json
 from pathlib import Path
 import sqlite3
+import tempfile
 import time
 from typing import Callable
 from urllib.parse import urlsplit
+from urllib.error import HTTPError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from ..config import CareerConfig
@@ -20,10 +22,11 @@ from ..database.migrations import connect
 from ..database.repository import JobRepository
 from ..domain.crawler import JobSnapshot, SourceDescriptor
 from ..public_catalog_format import (MAX_EXPANDED_BYTES, MAX_JOBS, MAX_MANIFEST_BYTES,
-                                    MAX_SOURCE_BYTES, SCHEMA, SNAPSHOT_PATH, public_descriptor,
-                                    public_job, timestamp)
+                                    MAX_SOURCE_BYTES, SCHEMA, FULL_SCHEMA, SNAPSHOT_PATH, public_descriptor,
+                                    public_job, timestamp, full_generation)
 
-DEFAULT_FEED_URL = "https://app.opencareer.online/public/jobs/v1/"
+DEFAULT_FEED_URL = "https://app.opencareer.online/public/jobs/v2/"
+LEGACY_FEED_URL = "https://app.opencareer.online/public/jobs/v1/"
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -70,16 +73,33 @@ class PublicCatalogSync:
                 or parsed.query or parsed.fragment or not parsed.path.endswith("/")):
             raise ValueError("public feed needs a fixed HTTPS directory URL")
         self.config, self.base_url, self.fetch = config, base_url, fetch
+        self.requested_base_url = base_url
         if descriptors is None:
             descriptors = [a.descriptor for a in [*default_adapters(), *default_resumable_adapters()]]
         self.descriptors = {d.source_slug: d for d in descriptors}
         self.cache_path = config.data_dir / "public-catalog-cache.json"
 
     def _manifest(self) -> dict:
-        content = self.fetch(self.base_url + "manifest.json", MAX_MANIFEST_BYTES)
+        try:
+            content = self.fetch(self.base_url + "manifest.json", MAX_MANIFEST_BYTES)
+        except HTTPError as exc:
+            if self.base_url != DEFAULT_FEED_URL or exc.code not in {404, 410}:
+                raise
+            self.base_url = LEGACY_FEED_URL
+            content = self.fetch(self.base_url + "manifest.json", MAX_MANIFEST_BYTES)
+        # The existing static host serves its SPA for a not-yet-installed v2
+        # directory. This explicit legacy fallback never rewrites source dates.
+        if self.base_url == DEFAULT_FEED_URL and content.lstrip().lower().startswith((b"<!doctype html", b"<html")):
+            self.base_url = LEGACY_FEED_URL
+            content = self.fetch(self.base_url + "manifest.json", MAX_MANIFEST_BYTES)
         manifest = _json(content)
-        if not isinstance(manifest, dict) or type(manifest.get("schema_version")) is not int or manifest["schema_version"] != SCHEMA:
+        if not isinstance(manifest, dict) or type(manifest.get("schema_version")) is not int or manifest["schema_version"] not in {SCHEMA, FULL_SCHEMA}:
             raise ValueError("unsupported public catalog manifest")
+        complete = manifest["schema_version"] == FULL_SCHEMA
+        if complete:
+            if manifest.get("snapshot_mode") != "complete":
+                raise ValueError("missing full catalog mode")
+            full_generation(manifest.get("generation"))
         timestamp(manifest.get("generated_at"))
         sources = manifest.get("sources")
         if not isinstance(sources, list) or not 1 <= len(sources) <= 200:
@@ -102,7 +122,7 @@ class PublicCatalogSync:
                 raise ValueError("invalid public catalog download path")
             if type(source.get("size")) is not int or not 0 < source["size"] <= MAX_SOURCE_BYTES:
                 raise ValueError("invalid catalog download size")
-            if type(source.get("job_count")) is not int or not 0 < source["job_count"] <= MAX_JOBS:
+            if type(source.get("job_count")) is not int or not (0 if complete else 1) <= source["job_count"] <= MAX_JOBS:
                 raise ValueError("invalid catalog job count")
             if type(source.get("active_count")) is not int or not 0 <= source["active_count"] <= source["job_count"]:
                 raise ValueError("invalid active catalog count")
@@ -110,6 +130,15 @@ class PublicCatalogSync:
                 raise ValueError("invalid upstream catalog status")
             if source.get("last_success_at") is not None:
                 timestamp(source["last_success_at"])
+            if complete and (source["latest_status"] != "succeeded" or source.get("last_success_at") is None
+                             or source["active_count"] != source["job_count"]):
+                raise ValueError("incomplete full catalog source")
+            if complete:
+                start, end, success = (datetime.fromisoformat(v.replace("Z", "+00:00")) for v in
+                                      (manifest["generation"]["started_at"], manifest["generation"]["completed_at"], source["last_success_at"]))
+                if not start <= success <= end:
+                    raise ValueError("full source has an invalid completion time")
+            source["_full_generation"] = manifest["generation"] if complete else None
             expected = self.descriptors.get(slug)
             if expected is not None and (descriptor["company_slug"] != expected.company_slug
                                          or descriptor["scope_key"] != expected.scope_key):
@@ -146,7 +175,8 @@ class PublicCatalogSync:
         if len(expanded) > MAX_EXPANDED_BYTES:
             raise ValueError("public catalog expands beyond its limit")
         snapshot = _json(expanded)
-        if (not isinstance(snapshot, dict) or type(snapshot.get("schema_version")) is not int or snapshot["schema_version"] != SCHEMA
+        schema = FULL_SCHEMA if source.get("_full_generation") else SCHEMA
+        if (not isinstance(snapshot, dict) or type(snapshot.get("schema_version")) is not int or snapshot["schema_version"] != schema
                 or snapshot.get("source_slug") != source["descriptor"]["source_slug"]):
             raise ValueError("public catalog source does not match")
         rows = snapshot.get("jobs")
@@ -155,6 +185,14 @@ class PublicCatalogSync:
         ids = set()
         for row in rows:
             public_job(row)
+            if schema == FULL_SCHEMA:
+                generation = source["_full_generation"]
+                start, end, observed = (datetime.fromisoformat(v.replace("Z", "+00:00"))
+                                        for v in (generation["started_at"], generation["completed_at"], row["observed_at"]))
+                if "catalog_events" not in row or row["status"] != "active" or not start <= observed <= end:
+                    raise ValueError("invalid full catalog observation")
+                if any(datetime.fromisoformat(e["observed_at"].replace("Z", "+00:00")) > end for e in row["catalog_events"]):
+                    raise ValueError("invalid full catalog event time")
             if row["external_job_id"] in ids:
                 raise ValueError("public catalog has duplicate job ids")
             ids.add(row["external_job_id"])
@@ -162,13 +200,17 @@ class PublicCatalogSync:
             raise ValueError("active catalog count does not match snapshot")
         return rows
 
-    def _apply(self, descriptor: SourceDescriptor, rows: list[dict], observed_at: str | None = None) -> None:
-        connection = connect(self.config.database_path)
+    def _apply(self, descriptor: SourceDescriptor, rows: list[dict], observed_at: str | None = None,
+               *, complete: bool = False, _connection: sqlite3.Connection | None = None) -> None:
+        connection = _connection if _connection is not None else connect(self.config.database_path)
+        owns_transaction = _connection is None
         try:
-            connection.execute("PRAGMA journal_mode=WAL")
+            if owns_transaction:
+                connection.execute("PRAGMA journal_mode=WAL")
             repository = JobRepository(connection)
-            connection.commit()
-            connection.execute("BEGIN IMMEDIATE")
+            if owns_transaction:
+                connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
             source = repository.ensure_crawl_source(descriptor)
             from . import job_changes
             source_id = str(source["crawl_source_id"])
@@ -210,14 +252,38 @@ class PublicCatalogSync:
                      json.dumps(row["locations"], ensure_ascii=False), json.dumps(row["responsibilities"], ensure_ascii=False),
                      json.dumps(row["requirements"], ensure_ascii=False), job_id),
                 )
-            if stamp:
+                for event in row.get("catalog_events", []):
+                    connection.execute("""INSERT OR IGNORE INTO job_catalog_changes
+                        (job_id,source_id,kind,observed_at,window_start,origin) VALUES (?,?,?,?,?,?)""",
+                        (job_id, source_id, event["kind"], event["observed_at"], event["window_start"], "public_full_snapshot"))
+            if complete:
+                if stamp is None:
+                    raise ValueError("full source needs its actual completion time")
+                # Retain identities and private references, retire only absent
+                # public jobs. A newer direct observation must not be rolled back.
+                connection.execute("CREATE TEMP TABLE IF NOT EXISTS incoming_catalog_ids (id TEXT PRIMARY KEY)")
+                connection.execute("DELETE FROM incoming_catalog_ids")
+                connection.executemany("INSERT INTO incoming_catalog_ids VALUES (?)", ((r["external_job_id"],) for r in rows))
+                connection.execute("""UPDATE jobs SET status='inactive' WHERE crawl_source_id=? AND status='active'
+                    AND external_job_id NOT IN (SELECT id FROM incoming_catalog_ids)
+                    AND julianday(last_seen_at)<=julianday(?)""", (source_id, stamp))
+            upstream_events = complete and all("catalog_events" in r for r in rows)
+            if stamp and not upstream_events:
                 job_changes.record(connection, source_id, before, stamp, origin="public_snapshot")
-            connection.commit()
+            elif stamp:
+                connection.execute("""INSERT INTO job_catalog_baselines(source_id,observed_at,origin) VALUES (?,?,?)
+                    ON CONFLICT(source_id) DO UPDATE SET observed_at=excluded.observed_at,origin=excluded.origin
+                    WHERE julianday(excluded.observed_at)>julianday(job_catalog_baselines.observed_at)""",
+                    (source_id, stamp, "public_full_snapshot"))
+            if owns_transaction:
+                connection.commit()
         except Exception:
-            connection.rollback()
+            if owns_transaction:
+                connection.rollback()
             raise
         finally:
-            connection.close()
+            if owns_transaction:
+                connection.close()
 
     def _present(self, slug: str, expected_count: int) -> bool:
         connection = connect(self.config.database_path)
@@ -233,6 +299,8 @@ class PublicCatalogSync:
             connection.close()
 
     def run(self) -> dict:
+        # Recheck v2 every time; a startup fallback must not pin clients to v1.
+        self.base_url = self.requested_base_url
         manifest = self._manifest()
         try:
             cache = json.loads(self.cache_path.read_text()) if self.config.database_path.exists() else {}
@@ -250,9 +318,12 @@ class PublicCatalogSync:
         result = {"ok": True, "mode": "shared", "state": "running", "sources": sources,
                   "completed": 0, "failed": 0, "unchanged": 0, "total_sources": len(sources),
                   "published_at": manifest["generated_at"], "updated_at": time.time()}
+        result.update(feed_schema=manifest["schema_version"], legacy_fallback=self.requested_base_url == DEFAULT_FEED_URL and self.base_url == LEGACY_FEED_URL)
         path = self.config.data_dir / "local-job-sync.json"
         _save(path, result)
         entries = {s["descriptor"]["source_slug"]: s for s in manifest["sources"]}
+        if manifest["schema_version"] == FULL_SCHEMA:
+            return self._run_full(manifest, cache, result, path, entries)
         for progress in sources:
             slug = progress["slug"]
             source = entries[slug]
@@ -263,7 +334,8 @@ class PublicCatalogSync:
                     result["unchanged"] += 1
                 else:
                     rows = self._rows(source)
-                    self._apply(self.descriptors[slug], rows, source.get("last_success_at"))
+                    self._apply(self.descriptors[slug], rows, source.get("last_success_at"),
+                                complete=manifest["schema_version"] == FULL_SCHEMA)
                     cache.setdefault("sources", {})[slug] = source["sha256"]
                     _save(self.cache_path, cache)
                 progress["status"] = "succeeded"
@@ -275,5 +347,58 @@ class PublicCatalogSync:
             result["updated_at"] = time.time()
             _save(path, result)
         result["state"] = "partial" if result["failed"] else "completed"
+        _save(path, result)
+        return result
+
+    def _run_full(self, manifest: dict, cache: dict, result: dict, path: Path, entries: dict) -> dict:
+        """Validate all downloads first, commit the entire generation together.
+
+        Keep one source's expanded JSON in memory at a time. Temporary files
+        contain public data only and are removed on every completion path.
+        """
+        result.update(generation=manifest["generation"], snapshot_mode="complete", revision=manifest["revision"])
+        connection = None
+        progress = None
+        try:
+            with tempfile.TemporaryDirectory(prefix=".catalog-download-", dir=self.config.data_dir) as folder:
+                prepared: dict[str, Path] = {}
+                for progress in result["sources"]:
+                    slug = progress["slug"]
+                    source = entries[slug]
+                    progress["status"] = "running"
+                    _save(path, result)
+                    if cache["sources"].get(slug) == source["sha256"] and self._present(slug, source["job_count"]):
+                        result["unchanged"] += 1
+                        continue
+                    rows = self._rows(source)
+                    temporary = Path(folder) / f"{slug}.json"
+                    temporary.write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
+                    prepared[slug] = temporary
+                    del rows
+                if prepared:
+                    connection = connect(self.config.database_path)
+                    connection.execute("PRAGMA journal_mode=WAL")
+                    JobRepository(connection)
+                    connection.commit()
+                    connection.execute("BEGIN IMMEDIATE")
+                    for slug, temporary in prepared.items():
+                        progress = next(p for p in result["sources"] if p["slug"] == slug)
+                        self._apply(self.descriptors[slug], json.loads(temporary.read_text(encoding="utf-8")),
+                                    entries[slug]["last_success_at"], complete=True, _connection=connection)
+                    connection.commit()
+                for progress in result["sources"]:
+                    progress.update(status="succeeded", checked_at=time.time())
+                    cache["sources"][progress["slug"]] = entries[progress["slug"]]["sha256"]
+                _save(self.cache_path, cache)
+                result.update(state="completed", completed=len(result["sources"]), updated_at=time.time())
+        except Exception:
+            if connection is not None:
+                connection.rollback()
+            if progress is not None:
+                progress.update(status="failed", checked_at=time.time())
+            result.update(state="partial", completed=0, failed=1, error_code="FULL_CATALOG_NOT_APPLIED", updated_at=time.time())
+        finally:
+            if connection is not None:
+                connection.close()
         _save(path, result)
         return result

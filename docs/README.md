@@ -64,6 +64,8 @@ Career 领域能力通过 `extensions/career_mcp` 与 OpenWorker 核心隔离。
 
 ## 运维手册
 
+- [每日04:00全量岗位目录](../deploy/daily-catalog/README.md)：独立空库采集、完整代次发布、历史变化保留；仅在真实部署验收后才代表公网已启用。
+
 - [`26_FRONTEND_DESIGN.md`](26_FRONTEND_DESIGN.md)：温暖浅色设计规则、页面覆盖、本地响应式与交互验收。
 - [`27_LOCAL_ACCESS.md`](27_LOCAL_ACCESS.md)：本地浏览器、外部服务连接和默认只读的文件夹授权；公共网站保持独立隔离。
 

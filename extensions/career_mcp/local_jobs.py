@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager, nullcontext
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -150,7 +151,7 @@ class LocalJobSync:
                 source["status"] = "succeeded" if succeeded else "failed"
                 if succeeded:
                     source["confirmed_at"] = self.clock()
-                    source["last_success_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(source["confirmed_at"]))
+                    source["last_success_at"] = datetime.fromtimestamp(source["confirmed_at"], timezone.utc).isoformat().replace("+00:00", "Z")
             except Exception:
                 # Remote response text may contain query tokens or HTML. Keep it out
                 # of the status API; catalog services retain their normal local evidence.

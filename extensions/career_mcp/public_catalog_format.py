@@ -17,6 +17,7 @@ import tempfile
 from urllib.parse import urlsplit
 
 SCHEMA = 1
+FULL_SCHEMA = 2
 MAX_MANIFEST_BYTES = 1_000_000
 MAX_SOURCE_BYTES = 32_000_000
 MAX_EXPANDED_BYTES = 128_000_000
@@ -39,7 +40,7 @@ def timestamp(value: object) -> str:
 
 
 def public_job(value: object) -> dict:
-    if not isinstance(value, dict) or set(value) != JOB_FIELDS:
+    if not isinstance(value, dict) or set(value) not in (JOB_FIELDS, JOB_FIELDS | {"catalog_events"}):
         raise ValueError("unexpected or private fields in public job")
     for field, limit in (("external_job_id", 300), ("title", 2000), ("description_raw", 200_000), ("source_url", 4096)):
         text = value[field]
@@ -59,6 +60,30 @@ def public_job(value: object) -> dict:
         items = value[field]
         if not isinstance(items, list) or len(items) > 500 or any(not isinstance(x, str) or len(x) > 100_000 for x in items):
             raise ValueError("invalid public job list")
+    events = value.get("catalog_events", [])
+    if not isinstance(events, list) or len(events) > 500:
+        raise ValueError("invalid public catalog events")
+    for event in events:
+        if (not isinstance(event, dict) or set(event) != {"kind", "observed_at", "window_start"}
+                or event["kind"] not in {"new", "updated", "reopened", "backfill"}):
+            raise ValueError("invalid public catalog event")
+        stamp = datetime.fromisoformat(timestamp(event["observed_at"]).replace("Z", "+00:00"))
+        if event["window_start"] is not None:
+            start = datetime.fromisoformat(timestamp(event["window_start"]).replace("Z", "+00:00"))
+            if start >= stamp:
+                raise ValueError("invalid public event window")
+    return value
+
+
+def full_generation(value: object) -> dict:
+    if (not isinstance(value, dict) or set(value) != {"id", "started_at", "completed_at"}
+            or not isinstance(value["id"], str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value["id"])):
+        raise ValueError("invalid full catalog generation")
+    datetime.strptime(value["id"], "%Y-%m-%d")
+    start, end = (datetime.fromisoformat(timestamp(value[k]).replace("Z", "+00:00"))
+                  for k in ("started_at", "completed_at"))
+    if start > end:
+        raise ValueError("invalid full catalog generation interval")
     return value
 
 
@@ -96,12 +121,15 @@ def catalog_freshness(manifest: dict, *, now: datetime | None = None,
             "freshness_max_age_hours": max_age_hours}
 
 
-def publish_stream(records, output: Path) -> dict:
+def publish_stream(records, output: Path, *, generation: dict | None = None) -> dict:
     """Publish only after an entire, counted export ends successfully.
 
     Producers send source/job/end_source records then an end_feed sentinel. Large
     descriptions stream straight into gzip instead of accumulating in host RAM.
     """
+    if generation is not None:
+        full_generation(generation)
+    schema = FULL_SCHEMA if generation is not None else SCHEMA
     output.mkdir(parents=True, exist_ok=True)
     sources, slugs = [], set()
     current = None
@@ -120,12 +148,19 @@ def publish_stream(records, output: Path) -> dict:
                     raise ValueError("duplicate or excessive sources")
                 slugs.add(slug)
                 count = record.get("expected_count")
-                if type(count) is not int or not 1 <= count <= MAX_JOBS:
+                if type(count) is not int or not (0 if generation else 1) <= count <= MAX_JOBS:
                     raise ValueError("invalid source count")
                 success_at = record.get("last_success_at")
                 if success_at is not None:
                     timestamp(success_at)
                 latest = record.get("latest_status", "unknown")
+                if generation is not None and (latest != "succeeded" or success_at is None):
+                    raise ValueError("full publication requires every source to succeed")
+                if generation is not None:
+                    start, end, success = (datetime.fromisoformat(v.replace("Z", "+00:00")) for v in
+                                          (generation["started_at"], generation["completed_at"], success_at))
+                    if not start <= success <= end:
+                        raise ValueError("full source completion is outside this generation")
                 if latest not in {"succeeded", "failed", "degraded", "running", "unknown"}:
                     latest = "unknown"
                 folder = output / "sources" / slug
@@ -135,11 +170,19 @@ def publish_stream(records, output: Path) -> dict:
                 temporary = Path(name)
                 raw = os.fdopen(fd, "wb")
                 zipped = gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0)
-                zipped.write(b'{"schema_version":1,"source_slug":' + encoded(slug) + b',"jobs":[')
+                zipped.write(b'{"schema_version":' + encoded(schema) + b',"source_slug":' + encoded(slug) + b',"jobs":[')
                 current = {"descriptor": descriptor, "expected": count, "count": 0, "active": 0,
                            "ids": set(), "expanded": 0, "latest_status": latest, "last_success_at": success_at}
             elif kind == "job" and current is not None:
                 item = public_job(record.get("job"))
+                if generation is not None:
+                    observed = datetime.fromisoformat(item["observed_at"].replace("Z", "+00:00"))
+                    start, end = (datetime.fromisoformat(generation[k].replace("Z", "+00:00")) for k in ("started_at", "completed_at"))
+                    if item["status"] != "active" or not start <= observed <= end:
+                        raise ValueError("full catalog contains an old or inactive observation")
+                    if any(datetime.fromisoformat(e["observed_at"].replace("Z", "+00:00")) > end
+                           for e in item.get("catalog_events", [])):
+                        raise ValueError("public event is newer than the completed scan")
                 if item["external_job_id"] in current["ids"]:
                     raise ValueError("duplicate public job id")
                 current["ids"].add(item["external_job_id"])
@@ -182,10 +225,12 @@ def publish_stream(records, output: Path) -> dict:
                 raise ValueError("incomplete or out-of-order catalog stream")
         if not finished or current is not None:
             raise ValueError("catalog export was interrupted")
-        manifest = {"schema_version": SCHEMA, "generated_at": datetime.now(timezone.utc).isoformat(),
+        manifest = {"schema_version": schema, "generated_at": datetime.now(timezone.utc).isoformat(),
                     "revision": hashlib.sha256(encoded(sources)).hexdigest(), "sources": sources,
                     "job_count": sum(s["job_count"] for s in sources),
                     "active_count": sum(s["active_count"] for s in sources)}
+        if generation is not None:
+            manifest.update(snapshot_mode="complete", generation=generation)
         content = encoded(manifest)
         if len(content) > MAX_MANIFEST_BYTES:
             raise ValueError("catalog manifest is too large")

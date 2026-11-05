@@ -185,12 +185,13 @@ class JobRepository:
             self.connection.execute(
                 """
                 UPDATE crawl_cycle_jobs
-                SET last_pass = ?, observed_at = ?
+                SET last_pass = ?, observed_at = ?, snapshot_json = ?
                 WHERE cycle_id = ? AND external_job_id = ?
                 """,
                 (
                     pass_number,
                     observed_at,
+                    json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
                     cycle_id,
                     external_job_id,
                 ),
@@ -233,7 +234,9 @@ class JobRepository:
         return [
             {
                 **dict(row),
-                "snapshot": json.loads(row["snapshot_json"]),
+                # Older checkpoints refreshed the authoritative column but not
+                # the serialized copy. Use the recorded observation, never now.
+                "snapshot": {**json.loads(row["snapshot_json"]), "observed_at": row["observed_at"]},
             }
             for row in rows
         ]

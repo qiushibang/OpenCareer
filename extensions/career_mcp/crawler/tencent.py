@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from dataclasses import dataclass
 from math import ceil
 from typing import Callable, Mapping
@@ -10,7 +11,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
-from ..domain.crawler import JobSnapshot, SourceDescriptor
+from ..domain.crawler import JobSnapshot, SourceDescriptor, ResumableListingPage
 from ..domain.manual_jd import utc_now_iso
 
 LISTING_API = "https://careers.tencent.com/tencentcareer/api/post/Query"
@@ -348,6 +349,74 @@ def build_tencent_listing_url(scope: TencentScope, page_num: int) -> str:
     return f"{LISTING_API}?{query}"
 
 
+class TencentResumableAdapter:
+    """Daily full scans checkpoint small detail batches instead of truncating
+    growing scopes at historical request budgets. The normal adapter stays
+    bounded for existing interactive callers; daily scans reuse its parsers.
+    """
+    detail_batch_size = 20
+
+    def __init__(self, adapter: TencentCareersAdapter) -> None:
+        self.adapter = adapter
+        self.source_slug, self.descriptor = adapter.source_slug, adapter.descriptor
+        self._pages: dict[int, TencentListingPage] = {}
+
+    def initial_shards(self) -> list[dict]:
+        return [{"shard_key": "all", "filters": {}}]
+
+    def verify_stale_jobs(self, snapshots: list[JobSnapshot]) -> dict[str, str]:
+        # A complete, uncapped official scope listing is authoritative for
+        # membership. Never infer closure from an error, short or duplicate page.
+        ids: set[str] = set()
+        total = None
+        page_num = 1
+        while True:
+            page = parse_tencent_listing(self.adapter._fetch_listing(self.adapter.scope, page_num), scope=self.adapter.scope)
+            if total is None:
+                total = page.total
+            if page.total != total or total >= 10_000:
+                raise TencentApiError("Tencent tail verification total changed or exceeded its bound")
+            expected = min(self.adapter.page_size, max(0, total - (page_num - 1) * self.adapter.page_size))
+            if len(page.posts) != expected or any(p.post_id in ids for p in page.posts):
+                raise TencentApiError("Tencent tail verification listing is incomplete")
+            ids.update(p.post_id for p in page.posts)
+            if len(ids) == total:
+                break
+            page_num += 1
+        return {s.external_job_id: "active" if s.external_job_id in ids else "offline" for s in snapshots}
+
+    def fetch_page(self, filters: dict, offset: int) -> ResumableListingPage:
+        if offset < 0 or offset % self.detail_batch_size:
+            raise ValueError("invalid Tencent detail checkpoint")
+        if offset == 0:
+            self._pages.clear()  # Each validation pass re-reads official listings.
+        page_size = self.adapter.page_size
+        page_num = offset // page_size + 1
+        if page_num not in self._pages:
+            self._pages[page_num] = parse_tencent_listing(
+                self.adapter._fetch_listing(self.adapter.scope, page_num), scope=self.adapter.scope)
+        page = self._pages[page_num]
+        if page.total >= 10_000:
+            raise TencentApiError("Tencent full source exceeds the bounded 10000-job scan")
+        expected = min(page_size, max(0, page.total - (page_num - 1) * page_size))
+        if len(page.posts) != expected:
+            raise TencentApiError("Tencent full listing count does not match total")
+        if self._pages and any(p.total != page.total for p in self._pages.values()):
+            raise TencentApiError("Tencent full listing total changed during crawl")
+        posts = page.posts[offset % page_size: offset % page_size + self.detail_batch_size]
+        jobs = []
+        for post in posts:
+            payload = self.adapter._fetch_detail(post.post_id)
+            job = parse_tencent_detail(payload, scope=self.adapter.scope,
+                                      expected_post_id=post.post_id, observed_at=self.adapter._clock())
+            if job.title != post.title:
+                raise TencentApiError("Tencent detail title does not match listing")
+            jobs.append(job)
+        next_offset = offset + len(posts)
+        return ResumableListingPage(jobs, page.total, next_offset, next_offset >= page.total,
+            hashlib.sha256(json.dumps([p.post_id for p in posts]).encode()).hexdigest())
+
+
 def build_tencent_detail_url(post_id: str) -> str:
     if not post_id.isdigit():
         raise ValueError("post_id must be numeric")
@@ -417,6 +486,8 @@ def parse_tencent_listing(
     data = _response_data(payload)
     total = _required_int(data, "Count")
     entries = data.get("Posts")
+    if total == 0 and entries is None:
+        entries = []
     if not isinstance(entries, list):
         raise TencentApiError("Tencent Data.Posts must be a list")
 

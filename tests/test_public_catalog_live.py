@@ -15,9 +15,9 @@ def test_new_local_database_matches_the_real_public_snapshot(tmp_path):
     requests = []
     manifests = []
     def fetch(url, max_bytes):
-        body = download(url, max_bytes)
         requests.append(url)
-        if url.endswith("manifest.json"):
+        body = download(url, max_bytes)
+        if url.endswith("manifest.json") and body.lstrip().startswith(b"{"):
             manifests.append(json.loads(body))
         return body
     config = CareerConfig(tmp_path / "career")
@@ -36,5 +36,5 @@ def test_new_local_database_matches_the_real_public_snapshot(tmp_path):
     changed = [entry for entry in manifests[-1]["sources"] if before.get(entry["descriptor"]["source_slug"]) != entry["sha256"]]
     assert repeated["failed"] == 0
     assert repeated["unchanged"] == len(manifests[-1]["sources"]) - len(changed)
-    assert len(requests) == 1 + len(changed) and requests[0].endswith("manifest.json")
+    assert len(requests) == (2 if repeated.get("legacy_fallback") else 1) + len(changed) and requests[0].endswith("manifest.json")
     assert tracker.get(job_id)["note"] == "隔离验收备注，不应上传"

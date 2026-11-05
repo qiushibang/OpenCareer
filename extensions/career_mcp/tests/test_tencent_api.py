@@ -343,3 +343,39 @@ def test_production_scopes_cover_all_live_accepted_tencent_partitions():
     assert {
         scope.descriptor.company_slug for scope in TENCENT_PRODUCTION_SCOPES
     } == {"tencent"}
+
+
+def test_official_null_posts_is_empty_only_when_count_zero():
+    scope=_scope()
+    assert parse_tencent_listing({'Code':200,'Data':{'Count':0,'Posts':None}},scope=scope).posts==[]
+    with pytest.raises(TencentApiError):
+        parse_tencent_listing({'Code':200,'Data':{'Count':1,'Posts':None}},scope=scope)
+
+
+def test_daily_resumable_scope_fetches_growing_catalog_without_truncation(tmp_path):
+    from extensions.career_mcp.crawler.tencent import TencentResumableAdapter
+    from extensions.career_mcp.services.resumable_crawler import ResumableCrawlerService
+    scope=TencentScope('tencent-test','Tencent Test','953','CDG',max_jobs=1)
+    ids=[str(1000+i) for i in range(23)]
+    calls=[]
+    regular=TencentCareersAdapter(scope,fetch_listing=lambda s,p:_listing(len(ids),ids),
+        fetch_detail=lambda key:calls.append(key) or _detail(key),clock=lambda:OBSERVED_AT)
+    adapter=TencentResumableAdapter(regular)
+    service=ResumableCrawlerService(CareerConfig(tmp_path),max_pages_per_batch=1)
+    result=service.run_batch(adapter)
+    assert result['has_more'] and len(calls)==20
+    for _ in range(6):
+        result=service.run_batch(adapter)
+        if not result['has_more']:break
+    assert result['status']=='committed' and result['observed_unique']==23
+    assert set(calls)==set(ids)
+
+
+def test_tail_verification_requires_complete_official_scope_before_closing_jobs():
+    from extensions.career_mcp.domain.crawler import JobSnapshot
+    adapter=tencent.TencentResumableAdapter(TencentCareersAdapter(_scope(),fetch_listing=lambda s,p:_listing(1,['1000'])))
+    snapshots=[JobSnapshot(key,'岗位','职责',f'https://careers.tencent.com/jobdesc.html?postId={key}',OBSERVED_AT) for key in ('1000','1001')]
+    assert adapter.verify_stale_jobs(snapshots)=={'1000':'active','1001':'offline'}
+    adapter.adapter._fetch_listing=lambda s,p:_listing(2,['1000'])
+    with pytest.raises(TencentApiError,match='incomplete'):
+        adapter.verify_stale_jobs(snapshots)

@@ -73,6 +73,7 @@ openworker = "coworker.cli:main"
 openworker-server = "coworker.server.run:main"
 openworker-connectors = "coworker.connectors.cli:main"
 opencareer-jobs-mcp = "extensions.career_mcp.jobs_mcp:main"
+opencareer-catalog-collector = "extensions.career_mcp.daily_catalog:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

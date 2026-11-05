@@ -24,6 +24,10 @@ KNOWN_CATEGORIES = {
     "运营类",
     "职能类",
     "管理类",
+    # Exact bilingual labels observed on the public official listing. Preserve
+    # them as evidence instead of guessing unknown categories from free text.
+    "产品类/Product", "市场类/Marketing&BD", "技术类/Technical", "算法类/AI",
+    "管理类/Manage", "职能类/Corporate Functions", "设计类/Design", "运营类/Operation",
 }
 
 
@@ -220,8 +224,11 @@ def _fetch_moka_dom_pages_sync(
                         page.goto(
                             f"{entry_url}?page={page_number}"
                             "&anchorName=jobsList",
-                            wait_until="networkidle",
-                            timeout=30_000,
+                            # Analytics can keep network activity alive after
+                            # all public cards are ready. Readiness is the DOM
+                            # contract below, not an idle network connection.
+                            wait_until="domcontentloaded",
+                            timeout=45_000,
                         )
                         parsed = urlparse(page.url)
                         if (
@@ -271,6 +278,9 @@ def _fetch_moka_dom_pages_sync(
                                 )?.innerText.trim() ?? ""
                             }))"""
                         )
+                        for raw in jobs:
+                            if not raw["description"]:
+                                raw["description"] = _read_moka_detail_description(context, entry_url, raw)
                         return {
                             "page": page_number,
                             "page_count": max(page_numbers),
@@ -296,6 +306,38 @@ def _fetch_moka_dom_pages_sync(
         raise RuntimeError(
             "Moonshot public page did not produce the expected dataset"
         ) from exc
+
+
+def _read_moka_detail_description(context, entry_url: str, raw: Mapping[str, object]) -> str:
+    """Missing list previews are not evidence of a missing official JD.
+
+    Read the matching public detail. Explicit text such as '暂无' is retained
+    verbatim; unavailable pages or unknown DOM still fail the source closed.
+    """
+    href = _required_text(raw, "href")
+    if not href.startswith("#/job/"):
+        raise MoonshotDataError("invalid public Moka detail path")
+    job_id = href.removeprefix("#/job/")
+    if str(UUID(job_id)) != job_id:
+        raise MoonshotDataError("invalid public Moka detail identity")
+    base = entry_url.split("#", 1)[0]
+    if urlparse(base).scheme != "https" or urlparse(base).hostname != "app.mokahr.com":
+        raise MoonshotDataError("invalid public Moka detail host")
+    page = context.new_page()
+    try:
+        page.goto(base + href, wait_until="domcontentloaded", timeout=45_000)
+        if page.url.split("#", 1)[0] != base or page.url.split("#", 1)[-1] != href[1:]:
+            raise MoonshotDataError("public Moka detail identity changed")
+        page.wait_for_selector('div[class^="job-description-"]', timeout=15_000)
+        titles = page.locator('div[class^="title-"]').all_text_contents()
+        if _required_text(raw, "title") not in {text.strip() for text in titles}:
+            raise MoonshotDataError("public Moka detail title differs from listing")
+        description = page.locator('div[class^="job-description-"]').first.text_content()
+        if not description or not description.strip():
+            raise MoonshotDataError("public Moka detail description is unavailable")
+        return description.strip()
+    finally:
+        page.close()
 
 
 def _looks_like_location(value: str) -> bool:

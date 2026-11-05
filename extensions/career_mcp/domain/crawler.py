@@ -28,6 +28,15 @@ class JobSnapshot:
 
 
 @dataclass(frozen=True)
+class ResumableListingPage:
+    jobs: list[JobSnapshot]
+    total: int
+    next_offset: int
+    complete: bool
+    fingerprint: str
+
+
+@dataclass(frozen=True)
 class NormalizedJob:
     identity: str
     external_job_id: str

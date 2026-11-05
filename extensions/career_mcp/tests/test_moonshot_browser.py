@@ -156,3 +156,36 @@ def test_default_registry_includes_live_accepted_moonshot():
     assert "moonshot-social" in {
         adapter.source_slug for adapter in default_adapters()
     }
+
+
+@pytest.mark.parametrize('label',['产品类/Product','市场类/Marketing&BD','技术类/Technical',
+    '算法类/AI','管理类/Manage','职能类/Corporate Functions','设计类/Design','运营类/Operation'])
+def test_current_official_bilingual_category_retains_original_evidence(label):
+    raw=_raw_job(1);raw['metadata']=['全职',label,'北京市']
+    parsed=parse_moonshot_card(raw,observed_at=OBSERVED_AT)
+    assert f'职类：{label}' in parsed.description_raw
+    raw['metadata']=['全职',label]
+    assert parse_moonshot_card(raw,observed_at=OBSERVED_AT).location_raw is None
+
+
+def test_missing_preview_reads_only_matching_official_detail_and_preserves_explicit_none():
+    from types import SimpleNamespace
+    from extensions.career_mcp.crawler.moonshot import _read_moka_detail_description
+    raw=_raw_job(1);closed=[]
+    class Locator:
+        first=None
+        def __init__(self,title):self.title=title;self.first=self
+        def all_text_contents(self):return [self.title]
+        def text_content(self):return '暂无'
+    class Page:
+        url='';title=raw['title']
+        def goto(self,url,**kwargs):self.url=url
+        def wait_for_selector(self,*args,**kwargs):pass
+        def locator(self,selector):return Locator(self.title)
+        def close(self):closed.append(True)
+    page=Page();context=SimpleNamespace(new_page=lambda:page)
+    description=_read_moka_detail_description(context,'https://app.mokahr.com/campus-recruitment/zphz/148984#/jobs',raw)
+    assert description=='暂无' and closed
+    page.title='another job'
+    with pytest.raises(MoonshotDataError,match='title differs'):
+        _read_moka_detail_description(context,'https://app.mokahr.com/campus-recruitment/zphz/148984#/jobs',raw)

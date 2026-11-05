@@ -226,12 +226,13 @@ class PostgresCatalogRepository:
             self.connection.execute(
                 """
                 UPDATE catalog.crawl_cycle_jobs
-                SET last_pass = %s, observed_at = %s
+                SET last_pass = %s, observed_at = %s, snapshot_json = %s::jsonb
                 WHERE cycle_id = %s AND external_job_id = %s
                 """,
                 (
                     pass_number,
                     observed_at,
+                    json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
                     cycle_id,
                     external_job_id,
                 ),
@@ -276,7 +277,7 @@ class PostgresCatalogRepository:
             {
                 "cycle_id": str(row[0]),
                 "external_job_id": str(row[1]),
-                "snapshot": dict(row[2] or {}),
+                "snapshot": {**dict(row[2] or {}), "observed_at": row[6].isoformat() if isinstance(row[6], datetime) else str(row[6])},
                 "content_hash": str(row[3]),
                 "first_pass": int(row[4]),
                 "last_pass": int(row[5]),

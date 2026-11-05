@@ -83,3 +83,27 @@ def test_default_registry_includes_live_accepted_didi():
     assert "didi-social-cn" in {
         adapter.source_slug for adapter in default_adapters()
     }
+
+
+def test_live_request_page_size_matches_validated_contract(monkeypatch):
+    from urllib.parse import urlsplit, parse_qs
+    from extensions.career_mcp.crawler import didi
+    calls=[]
+    monkeypatch.setattr(didi, '_fetch_json', lambda url, **kwargs: calls.append(url) or {})
+    didi.fetch_didi_listing(1)
+    query=parse_qs(urlsplit(calls[0]).query)
+    assert int(query['size'][0])==didi.DidiSocialAdapter.page_size
+
+
+def test_current_detail_without_recruit_type_requires_verified_listing_scope():
+    import pytest
+    payload=_json('detail_1.json');payload['data'].pop('recruitType')
+    with pytest.raises(ValueError):
+        parse_didi_detail(payload,expected_jd_id='65596',expected_jd_no='JR20260804017',observed_at=OBSERVED_AT)
+    job=parse_didi_detail(payload,expected_jd_id='65596',expected_jd_no='JR20260804017',
+                          observed_at=OBSERVED_AT,verified_listing_recruit_type=1)
+    assert job.recruitment_type=='experienced'
+    payload['data']['recruitType']='2'
+    with pytest.raises(ValueError):
+        parse_didi_detail(payload,expected_jd_id='65596',expected_jd_no='JR20260804017',
+                          observed_at=OBSERVED_AT,verified_listing_recruit_type=1)

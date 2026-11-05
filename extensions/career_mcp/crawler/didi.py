@@ -14,6 +14,7 @@ from ..domain.crawler import JobSnapshot, SourceDescriptor
 from ..domain.manual_jd import utc_now_iso
 
 API_BASE = "https://talent.didiglobal.com/recruit-portal-service/api/job"
+PAGE_SIZE = 16
 
 
 class DidiApiError(ValueError):
@@ -37,7 +38,7 @@ class DidiListingPage:
 
 class DidiSocialAdapter:
     source_slug = "didi-social-cn"
-    page_size = 16
+    page_size = PAGE_SIZE
     descriptor = SourceDescriptor(
         source_slug=source_slug,
         source_name="滴滴中国社会招聘",
@@ -84,6 +85,7 @@ class DidiSocialAdapter:
                 expected_jd_id=post.jd_id,
                 expected_jd_no=post.jd_no,
                 observed_at=observed_at,
+                verified_listing_recruit_type=1,
             )
             for post in posts
         ]
@@ -126,11 +128,15 @@ def parse_didi_detail(
     expected_jd_id: str,
     expected_jd_no: str,
     observed_at: str,
+    verified_listing_recruit_type: int | None = None,
 ) -> JobSnapshot:
     data = _data(payload)
     if _required_text(data, "jdNo") != expected_jd_no:
         raise DidiApiError("Didi detail jdNo does not match listing")
-    if _required_text(data, "recruitType") != "1":
+    # Current official details omit recruitType. Scope may then come only
+    # from a parsed jobType=1 listing whose jdNo matches this detail.
+    if ("recruitType" in data and _required_text(data, "recruitType") != "1"
+            or "recruitType" not in data and verified_listing_recruit_type != 1):
         raise DidiApiError("Didi detail escaped social recruitment")
     fields = (
         ("部门", data.get("deptName")),
@@ -158,7 +164,7 @@ def parse_didi_detail(
 
 def fetch_didi_listing(page: int) -> Mapping[str, object]:
     return _fetch_json(
-        f"{API_BASE}/front/list?jobType=1&page={page}&recruitType=1&size=10",
+        f"{API_BASE}/front/list?jobType=1&page={page}&recruitType=1&size={PAGE_SIZE}",
         referer="https://talent.didiglobal.com/m?jobType=1",
     )
 

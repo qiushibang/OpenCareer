@@ -69,8 +69,8 @@ RUN pip install --no-deps -e . \
 # ⚠️ uid 必须和后端镜像一致（deploy/Dockerfile 里也是 10001）。抓取容器要写朋友们的数据卷，
 # uid 不一致就会 Permission denied。
 RUN useradd --create-home --uid 10001 opencareer \
-    && mkdir -p /cache /targets \
-    && chown -R opencareer:opencareer /app /cache /targets \
+    && mkdir -p /cache /targets /collector /feed \
+    && chown -R opencareer:opencareer /app /cache /targets /collector /feed \
     && chmod -R a+rX /ms-playwright
 
 USER opencareer

@@ -11,7 +11,7 @@ from math import ceil
 from typing import Callable, Mapping
 from urllib.parse import parse_qs, urlencode, urlparse
 
-from ..domain.crawler import JobSnapshot, SourceDescriptor
+from ..domain.crawler import JobSnapshot, SourceDescriptor, ResumableListingPage
 from ..domain.manual_jd import utc_now_iso
 
 PROJECT_ID = "7621018151002507573"
@@ -32,15 +32,6 @@ class ByteDanceAccessRestricted(RuntimeError):
 class ByteDanceListingPage:
     jobs: list[JobSnapshot]
     total: int
-
-
-@dataclass(frozen=True)
-class ResumableListingPage:
-    jobs: list[JobSnapshot]
-    total: int
-    next_offset: int
-    complete: bool
-    fingerprint: str
 
 
 @dataclass(frozen=True)
