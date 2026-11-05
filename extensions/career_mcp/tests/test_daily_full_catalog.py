@@ -346,11 +346,17 @@ def test_slow_source_cannot_delay_next_four_oclock_fresh_generation(tmp_path):
     import time
     from extensions.career_mcp.daily_catalog import advance_until_boundary
     started=time.monotonic()
+    ready_at=[None]
+    marker=tmp_path/'worker/fixture-started'
     def clock():
-        return datetime(2026,11,5,19,59,59,tzinfo=timezone.utc)+timedelta(seconds=time.monotonic()-started)
+        if marker.exists() and ready_at[0] is None:
+            ready_at[0]=time.monotonic()
+        elapsed=0 if ready_at[0] is None else time.monotonic()-ready_at[0]
+        return datetime(2026,11,5,19,59,59,tzinfo=timezone.utc)+timedelta(seconds=elapsed)
     state=advance_until_boundary(tmp_path/'worker',tmp_path/'feed',clock=clock,worker=_slow_scheduled_fixture)
+    assert marker.exists()  # Exercise a running source, not just process startup.
     assert state['state']=='superseded'
-    assert time.monotonic()-started<4
+    assert time.monotonic()-started<8  # The source itself sleeps for 30 seconds.
     assert not (tmp_path/'feed/manifest.json').exists()
 
 
