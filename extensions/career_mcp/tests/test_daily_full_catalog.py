@@ -462,3 +462,50 @@ def test_idle_wait_rechecks_wall_clock_after_mac_resumes():
         now[0]+=timedelta(hours=12)
     wait_for_next_attempt(3600,clock=lambda:now[0],sleep=sleep)
     assert sleeps==[60]
+
+
+def test_main_retries_already_cooled_down_failure_after_slow_source_finishes(tmp_path,monkeypatch):
+    """A long scan must not add another 15m to an already elapsed backoff."""
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    import sys
+    from extensions.career_mcp import daily_catalog as daily
+    now=datetime(2026,11,6,4,tzinfo=timezone.utc)
+    runner=SimpleNamespace(root=tmp_path/'worker',output=tmp_path/'feed',clock=lambda:now)
+    state={'state':'incomplete','sources':{
+        'early-failure':{'status':'failed','checked_at':now.timestamp()-3600},
+        'slow-success':{'status':'succeeded','confirmed_at':now.timestamp()}}}
+    monkeypatch.setattr(sys,'argv',['daily-catalog','--data-dir',str(runner.root),'--output',str(runner.output)])
+    monkeypatch.setattr(daily,'DailyCatalogRunner',lambda *args:runner)
+    monkeypatch.setattr(daily,'worker_lock',lambda path:nullcontext())
+    monkeypatch.setattr(daily,'advance_until_boundary',lambda *args:state)
+    previous=daily.signal.getsignal(daily.signal.SIGTERM)
+    waits=[]
+    def wait(delay,**kwargs):
+        waits.append(delay)
+        raise StopIteration('one scheduling iteration')
+    monkeypatch.setattr(daily,'wait_for_next_attempt',wait)
+    try:
+        with pytest.raises(StopIteration):daily.main()
+    finally:daily.signal.signal(daily.signal.SIGTERM,previous)
+    assert waits==[1]
+
+
+@pytest.mark.parametrize('age,pending,expected',[
+    (0,False,900),(120,False,780),(1000,False,1),
+    (0,True,60),(1000,True,1),
+])
+def test_retry_delay_preserves_remaining_source_backoff(age,pending,expected):
+    from extensions.career_mcp.daily_catalog import next_attempt_delay
+    now=datetime(2026,11,6,4,tzinfo=timezone.utc)
+    sources={'failed':{'status':'failed','checked_at':now.timestamp()-age}}
+    if pending:sources['paging']={'status':'pending'}
+    assert next_attempt_delay({'state':'incomplete','sources':sources},now)==expected
+
+
+def test_retry_wait_never_delays_next_four_oclock_or_repeats_published_generation():
+    from extensions.career_mcp.daily_catalog import next_attempt_delay
+    now=datetime(2026,11,6,19,59,50,tzinfo=timezone.utc)
+    assert next_attempt_delay({'state':'incomplete','sources':{}},now)==10
+    now=datetime(2026,11,6,4,tzinfo=timezone.utc)
+    assert next_attempt_delay({'state':'published','sources':{'old':{'status':'failed','checked_at':0}}},now)==16*3600

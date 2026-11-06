@@ -46,6 +46,22 @@ def seconds_to_next_run(now: datetime) -> float:
     return (target - local).total_seconds()
 
 
+def next_attempt_delay(state: dict, now: datetime) -> float:
+    """Respect per-source backoff without adding idle time after a slow scan."""
+    boundary = seconds_to_next_run(now)
+    if state.get('state') == 'published':
+        return boundary
+    sources = state.get('sources', {}).values()
+    delays = [60 if any(s.get('status') == 'pending' for s in sources) else 900]
+    for source in state.get('sources', {}).values():
+        checked = source.get('checked_at')
+        if source.get('status') == 'failed' and type(checked) in (int, float):
+            # One second prevents a tight loop while step() retains the same
+            # 15-minute eligibility check before issuing any new request.
+            delays.append(max(1, 900 - (now.timestamp() - checked)))
+    return min(boundary, *delays)
+
+
 def wait_for_next_attempt(delay: float, *, clock: Callable[[], datetime],
                           sleep: Callable[[float], None] = time.sleep) -> None:
     """Idle waits use wall-clock deadlines, including laptop suspend/resume."""
@@ -369,9 +385,7 @@ def main() -> int:
                 return 0 if complete else 3
             if state.get('state') == 'superseded' or state.get('rollover_due'):
                 continue
-            pending = any(s.get('status') == 'pending' for s in state.get('sources', {}).values()) if not complete else False
-            delay = seconds_to_next_run(runner.clock()) if complete else min(60 if pending else 900, seconds_to_next_run(runner.clock()))
-            wait_for_next_attempt(delay, clock=runner.clock)
+            wait_for_next_attempt(next_attempt_delay(state, runner.clock()), clock=runner.clock)
 
 
 if __name__ == '__main__':
