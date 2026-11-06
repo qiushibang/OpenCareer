@@ -937,13 +937,15 @@ def _fetch_mainland_browser_response(
                         route.continue_()
 
                 page.route("**/*", block_heavy)
+                # The official filter response can arrive near 60s on slow links.
+                # Wait for that exact response, not unrelated document scripts.
                 with page.expect_response(
                     response_matcher,
-                    timeout=20_000,
+                    timeout=60_000,
                 ) as response_info:
                     page.goto(
                         page_url,
-                        wait_until="domcontentloaded",
+                        wait_until="commit",
                         timeout=20_000,
                     )
                 response = response_info.value

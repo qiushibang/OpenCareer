@@ -523,3 +523,42 @@ def test_public_fetch_runs_playwright_off_asyncio_thread(monkeypatch):
 
     assert result["code"] == 0
     assert worker_threads and worker_threads[0] != caller_thread
+
+
+def test_mainland_bootstrap_waits_for_slow_exact_response_not_document_load(monkeypatch):
+    """Real public filters arrived at 59s; document readiness is not the contract."""
+    actions = []
+    payload = {"code": 0, "data": {"job_category": []}}
+    response = SimpleNamespace(json=lambda: payload)
+    class ResponseContext:
+        value = response
+        def __init__(self, timeout):
+            self.timeout = timeout
+        def __enter__(self): return self
+        def __exit__(self, *args):
+            if self.timeout < 59_000:
+                raise TimeoutError("official response still loading")
+    class Page:
+        def route(self, *args): pass
+        def expect_response(self, matcher, *, timeout):
+            assert matcher(response)
+            actions.append("wait-response")
+            return ResponseContext(timeout)
+        def goto(self, url, *, wait_until, timeout):
+            # Deferred unrelated scripts can hold document readiness indefinitely.
+            if wait_until != "commit":
+                raise TimeoutError("document readiness delayed")
+            assert 0 < timeout <= 60_000
+    browser = SimpleNamespace(
+        new_context=lambda: SimpleNamespace(new_page=lambda: Page()),
+        close=lambda: actions.append("closed"),
+    )
+    class PlaywrightContext:
+        def __enter__(self):
+            return SimpleNamespace(chromium=SimpleNamespace(launch=lambda **kw: browser))
+        def __exit__(self, *args): pass
+    monkeypatch.setitem(sys.modules, "playwright.sync_api",
+                        SimpleNamespace(sync_playwright=PlaywrightContext))
+    assert bytedance._fetch_mainland_browser_response(
+        BYTEDANCE_MAINLAND_SOCIAL.page_url, lambda r: r is response) == payload
+    assert actions == ["wait-response", "closed"]
