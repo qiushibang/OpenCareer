@@ -28,6 +28,8 @@ python -m extensions.career_mcp.daily_catalog --data-dir ./catalog-worker --outp
 退出码 0 表示当天完整目录已发布，3 表示未完成。程序的操作系统文件锁阻止同目录双进程。
 目录必须全新且专用于本任务，不能指向现有用户或网站数据目录。不要手工改检查点或更新时间。
 
+Mac 验收时可使用 `caffeinate -i python -m extensions.career_mcp.daily_catalog --data-dir ./catalog-worker --output ./catalog-feed` 临时防止系统自动休眠；不修改永久电源设置。同目录只运行一个实例。休眠或断网期间无法采集，唤醒后会补启动当前代次，不把昨日结果当作今天已运行。逐来源进度实时保存在 status.json，包含无凭据的错误类型。
+
 ## 独立服务器容器
 
 `compose.yml` 是单独的编排项目，不合并网站编排，不挂载网站数据库或隧道。

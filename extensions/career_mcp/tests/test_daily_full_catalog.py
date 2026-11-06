@@ -414,3 +414,51 @@ def test_daily_zhipu_scan_uses_complete_page_envelope_instead_of_old_count_budge
                               clock=lambda:datetime.fromisoformat(stamp.replace('Z','+00:00')),pause=0)
     state=runner.step()
     assert state['state']=='published' and state['job_count']==31
+
+
+def _completed_after_resume_fixture(root,output,sender):
+    from pathlib import Path
+    import os
+    if os.name!='nt':os.setsid()
+    Path(root).mkdir(parents=True,exist_ok=True)
+    old_run=Path(root)/'runs/2026-11-05';old_run.mkdir(parents=True)
+    (old_run/'run.json').write_text(json.dumps({'state':'published','revision':'old-valid'}))
+    (Path(root)/'resumed-next-day').write_text('ready')
+    sender.send({'state':'published','generation':{'id':'2026-11-05'}})
+    sender.close()
+
+
+def test_sleep_clock_jump_after_result_delivery_starts_today_without_waiting_another_day(tmp_path):
+    from extensions.career_mcp.daily_catalog import advance_until_boundary
+    def clock():
+        return datetime(2026,11,6,1,tzinfo=timezone.utc) if (tmp_path/'worker/resumed-next-day').exists() else datetime(2026,11,5,19,tzinfo=timezone.utc)
+    result=advance_until_boundary(tmp_path/'worker',tmp_path/'feed',clock=clock,worker=_completed_after_resume_fixture)
+    assert result['state']=='published' and result['rollover_due'] is True
+    assert json.loads((tmp_path/'worker/runs/2026-11-05/run.json').read_text())['state']=='published'
+
+
+def test_progress_is_persisted_before_the_next_source_finishes(tmp_path):
+    from dataclasses import replace
+    from extensions.career_mcp.daily_catalog import DailyCatalogRunner
+    clock=lambda:datetime(2026,11,6,0,tzinfo=timezone.utc)
+    a,b=LiveFixtureAdapter(clock),LiveFixtureAdapter(clock)
+    b.source_slug='z-other-official';b.descriptor=replace(DESCRIPTOR,source_slug=b.source_slug,scope_key='other');b.items=[('other','产品经理')]
+    fetch=b.fetch_jobs
+    def observing_fetch():
+        progress=json.loads((tmp_path/'worker/status.json').read_text())
+        assert progress['state']=='collecting'
+        assert progress['sources'][a.source_slug]['status']=='succeeded'
+        return fetch()
+    b.fetch_jobs=observing_fetch
+    runner=DailyCatalogRunner(tmp_path/'worker',tmp_path/'feed',adapters=[a,b],resumable_adapters=[],clock=clock,pause=0)
+    assert runner.step()['state']=='published'
+
+
+def test_idle_wait_rechecks_wall_clock_after_mac_resumes():
+    from extensions.career_mcp.daily_catalog import wait_for_next_attempt
+    now=[datetime(2026,11,5,19,tzinfo=timezone.utc)];sleeps=[]
+    def sleep(seconds):
+        sleeps.append(seconds)
+        now[0]+=timedelta(hours=12)
+    wait_for_next_attempt(3600,clock=lambda:now[0],sleep=sleep)
+    assert sleeps==[60]

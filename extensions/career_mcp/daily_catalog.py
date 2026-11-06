@@ -46,6 +46,19 @@ def seconds_to_next_run(now: datetime) -> float:
     return (target - local).total_seconds()
 
 
+def wait_for_next_attempt(delay: float, *, clock: Callable[[], datetime],
+                          sleep: Callable[[float], None] = time.sleep) -> None:
+    """Idle waits use wall-clock deadlines, including laptop suspend/resume."""
+    started = clock()
+    deadline = started + timedelta(seconds=delay)
+    day = generation_day(started)
+    while True:
+        now = clock()
+        if now >= deadline or generation_day(now) != day:
+            return
+        sleep(min(60, (deadline - now).total_seconds()))
+
+
 def _save(path: Path, value: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix('.tmp')
@@ -118,14 +131,21 @@ def advance_until_boundary(root: Path, output: Path, *, clock: Callable[[], date
                 try:
                     result = receiver.recv()
                 except EOFError:
-                    return {'state':'failed', 'error_type':'CollectorExited'}
+                    result = {'state':'failed', 'error_type':'CollectorExited'}
                 process.join(timeout=1)
+                # Suspend/resume may jump past 04:00 while poll() was asleep.
+                # Even a valid previous-day result must not make us wait for
+                # tomorrow again. Its already-published files remain intact.
+                if generation_day(clock()) != day:
+                    return {**result, 'rollover_due':True}
                 return result
             if not process.is_alive():
                 return {'state':'failed', 'error_type':'CollectorExited'}
         _stop_step(process)
         path = root/'runs'/day/'run.json'
         state = _read(path)
+        if state.get('state') == 'published':
+            return {**state, 'rollover_due':True}
         state.update(state='superseded')
         _save(path, state)
         _save(root/'status.json', state)
@@ -233,6 +253,7 @@ class DailyCatalogRunner:
                             state['sources'][slug] = {'slug':slug,'name':self.descriptors[slug].source_name,
                                 'status':'succeeded','last_success_at':stamp,'confirmed_at':completed.timestamp()}
         _save(path, state)
+        _save(self.root/'status.json', state)
         pending = {slug for slug in self.descriptors
                    if state['sources'].get(slug, {}).get('status') != 'succeeded'
                    and not (state['sources'].get(slug, {}).get('status') == 'failed'
@@ -240,24 +261,29 @@ class DailyCatalogRunner:
         if pending:
             # Reuse paging/normalization/completeness; only the storage lifecycle
             # differs. A new day never sees yesterday's jobs or checkpoints.
+            def source_progress(progress: dict) -> None:
+                state['sources'].update({s['slug']:s for s in progress['sources']})
+                state['state'] = 'collecting'
+                _save(path, state)
+                _save(self.root/'status.json', state)
             sync = LocalJobSync(config,
                 adapters=[a for a in self.adapters if a.source_slug in pending],
                 resumable_adapters=[a for a in self.resumable_adapters if a.source_slug in pending],
-                clock=lambda: self.clock().timestamp(), pause=self.pause)
+                clock=lambda: self.clock().timestamp(), pause=self.pause, on_progress=source_progress)
             result = sync.run_cycle(force=True)
             state['sources'].update({s['slug']: s for s in result['sources']})
         complete = all(state['sources'].get(slug, {}).get('status') == 'succeeded' for slug in self.descriptors)
         state['state'] = 'ready' if complete else 'incomplete'
         _save(path, state)
         _save(self.root/'status.json', state)
-        if not complete:
-            return state
-        generation = {**state['generation'], 'completed_at': self.clock().isoformat()}
         if generation_day(self.clock()) != day:
             state['state'] = 'superseded'
             _save(path, state)
             _save(self.root/'status.json', state)
             return state
+        if not complete:
+            return state
+        generation = {**state['generation'], 'completed_at': self.clock().isoformat()}
         # Validate the whole generation before touching history or manifest.
         start = datetime.fromisoformat(generation['started_at'])
         end = datetime.fromisoformat(generation['completed_at'])
@@ -341,11 +367,11 @@ def main() -> int:
                 complete = False
             if args.once:
                 return 0 if complete else 3
-            if state.get('state') == 'superseded':
+            if state.get('state') == 'superseded' or state.get('rollover_due'):
                 continue
             pending = any(s.get('status') == 'pending' for s in state.get('sources', {}).values()) if not complete else False
             delay = seconds_to_next_run(runner.clock()) if complete else min(60 if pending else 900, seconds_to_next_run(runner.clock()))
-            time.sleep(delay)
+            wait_for_next_attempt(delay, clock=runner.clock)
 
 
 if __name__ == '__main__':

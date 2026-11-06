@@ -50,13 +50,15 @@ def request_refresh(config: CareerConfig, company_slugs: list[str] | None = None
 class LocalJobSync:
     def __init__(self, config: CareerConfig, *, adapters: list[JobAdapter] | None = None,
                  resumable_adapters: list | None = None, pause: float = 2,
-                 clock: Callable[[], float] = time.time) -> None:
+                 clock: Callable[[], float] = time.time,
+                 on_progress: Callable[[dict], None] | None = None) -> None:
         self.config = config
         self.adapters = default_adapters() if adapters is None else adapters
         self.resumable_adapters = (default_resumable_adapters()
                                    if resumable_adapters is None else resumable_adapters)
         self.pause = pause
         self.clock = clock
+        self.on_progress = on_progress
         self.crawler = CrawlerService(config)
         # Page checkpoints write before network requests. Keep their long SQLite
         # transactions away from the user's favorites/application database.
@@ -85,6 +87,8 @@ class LocalJobSync:
         temporary = path.with_suffix(".tmp")
         temporary.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
         temporary.replace(path)
+        if self.on_progress is not None:
+            self.on_progress(result)
         return result
 
     def run_cycle(self, *, force: bool = False, company_slugs: list[str] | None = None) -> dict:
@@ -152,10 +156,11 @@ class LocalJobSync:
                 if succeeded:
                     source["confirmed_at"] = self.clock()
                     source["last_success_at"] = datetime.fromtimestamp(source["confirmed_at"], timezone.utc).isoformat().replace("+00:00", "Z")
-            except Exception:
+            except Exception as exc:
                 # Remote response text may contain query tokens or HTML. Keep it out
                 # of the status API; catalog services retain their normal local evidence.
                 source["status"] = "failed"
+                source["error_type"] = type(exc).__name__
             source["checked_at"] = self.clock()
             self._save(sources, "running")
             time.sleep(self.pause)
