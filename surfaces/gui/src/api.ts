@@ -1881,7 +1881,10 @@ export async function getCareerJobs(
     ["offset", filters.offset],
   ];
   for (const [key, value] of values) {
-    if (value !== undefined && value !== "") query.set(key, String(value));
+    // Empty status explicitly includes history; omission keeps the API active-only default.
+    if (value !== undefined && (value !== "" || key === "status")) {
+      query.set(key, String(value));
+    }
   }
   const res = await fetch(`${httpBase()}/v1/career/jobs?${query.toString()}`);
   checkCareerJobsRateLimit(res);

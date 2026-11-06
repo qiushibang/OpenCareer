@@ -39,6 +39,19 @@ describe("career jobs API", () => {
     expect(url).not.toContain("recruitment_type=");
   });
 
+  it("keeps an explicit empty status for historical favorites while preserving the default", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ json: async () => ({ ok: true, jobs: [], total: 0 }) });
+    vi.stubGlobal("fetch", fetchMock);
+    await getCareerJobs({ favoriteOnly: true, status: "" });
+    await getCareerJobs();
+    const favorite = new URL(String(fetchMock.mock.calls[0][0]), "http://localhost").searchParams;
+    const normal = new URL(String(fetchMock.mock.calls[1][0]), "http://localhost").searchParams;
+    expect(favorite.get("favorite_only")).toBe("true");
+    expect(favorite.has("status")).toBe(true);
+    expect(favorite.get("status")).toBe("");
+    expect(normal.has("status")).toBe(false);
+  });
+
   it("uses encoded detail and fixed filter paths", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       json: async () => ({ ok: true }),

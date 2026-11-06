@@ -113,9 +113,9 @@ export function CareerJobsView({
   const [companySlug, setCompanySlug] = useState("");
   const [location, setLocation] = useState("");
   const [recruitmentType, setRecruitmentType] = useState("");
-  // Keep lifecycle data for tools; the radar has no lifecycle filter control.
-  const status = "active";
   const [favoriteOnly, setFavoriteOnly] = useState(false);
+  // The current catalog is active-only; private favorites retain retired jobs.
+  const status = favoriteOnly ? "" : "active";
   const [applicationStatus, setApplicationStatus] = useState<
     CareerApplicationStatus | ""
   >("");
@@ -609,7 +609,7 @@ export function CareerJobsView({
         ...(location ? [{field:"locations",op:"in",values:[location]}] : []),
         ...(query ? [{field:"text",op:"contains",values:[query]}] : []),
         ...(recruitmentType ? [{field:"recruitment_type",op:"in",values:[recruitmentType]}] : []),
-      ]}} today={advanced?.today} includeInactive={advanced?.include_inactive ?? status !== "active"} semanticQuery={advanced?.semantic_query} onConfigureInChat={onConfigureSubscription ? prompt => {setShowSubscriptions(false);onConfigureSubscription(prompt);} : undefined} onClose={() => setShowSubscriptions(false)} />}
+      ]}} today={advanced?.today} includeInactive={advanced?.include_inactive ?? false} semanticQuery={advanced?.semantic_query} onConfigureInChat={onConfigureSubscription ? prompt => {setShowSubscriptions(false);onConfigureSubscription(prompt);} : undefined} onClose={() => setShowSubscriptions(false)} />}
 
       <div
         className="flex-1 min-h-0 overflow-y-auto grid grid-cols-1 lg:overflow-hidden lg:grid-cols-[minmax(300px,38%)_1fr]"

@@ -420,6 +420,28 @@ describe("CareerJobsView", () => {
     );
   });
 
+  it("retains inactive favorites and their notes after full catalog replacement", async () => {
+    arrange();
+    const archived = { ...jobs[0], id: "archived-favorite", title: "已下线的收藏岗位", status: "inactive",
+      tracking: { ...detail.tracking, is_favorite: true, note: "保留原备注" } };
+    api.getCareerJobs.mockImplementation(async (criteria: { favoriteOnly?: boolean; status?: string }) => {
+      const visible = criteria.favoriteOnly ? (criteria.status === "" ? [archived] : []) : jobs;
+      return { ok: true, jobs: visible, total: visible.length };
+    });
+    api.getCareerJob.mockImplementation(async (id: string) => ({ ok: true,
+      job: id === archived.id ? { ...detail, ...archived } : detail }));
+    render(<CareerJobsView />);
+    await screen.findByRole("heading", { name: "JD" });
+    fireEvent.click(screen.getByRole("button", { name: "收藏箱（1）" }));
+    await screen.findByRole("heading", { name: archived.title });
+    expect(await screen.findByDisplayValue("保留原备注")).toBeTruthy();
+    expect(api.getCareerJobs).toHaveBeenLastCalledWith(expect.objectContaining({ favoriteOnly: true, status: "" }));
+    fireEvent.click(screen.getByRole("button", { name: "全部岗位" }));
+    await waitFor(() => expect(api.getCareerJobs).toHaveBeenLastCalledWith(
+      expect.objectContaining({ favoriteOnly: false, status: "active" })));
+    await waitFor(() => expect(screen.queryByRole("heading", { name: archived.title })).toBeNull());
+  });
+
   it("uses responsive job filters and list-detail layout", async () => {
     arrange();
     render(<CareerJobsView />);
