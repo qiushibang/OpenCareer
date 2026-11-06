@@ -5,6 +5,9 @@
 
 面向使用者：[项目首页](../README.md) · [安装与使用完整指南](GETTING_STARTED.md)
 
+
+最新交接：[HANDOFF.md](../HANDOFF.md)（2026-11-06：岗位时效任务已暂停，完整公共第二版尚未发布）。
+
 ## 当前状态
 
 OpenCareer 是基于 OpenWorker Fork 的本地优先求职 Agent。目前已贯通：
