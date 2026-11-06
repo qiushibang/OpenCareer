@@ -133,3 +133,40 @@ def test_default_registry_includes_live_accepted_xiaohongshu():
     assert "xiaohongshu-social-cn" in {
         adapter.source_slug for adapter in default_adapters()
     }
+
+
+def test_browser_pagination_ignores_duplicate_previous_page_response(monkeypatch):
+    """Official UI emitted requests 1, 1, 2; only request 2 is the next page."""
+    from types import SimpleNamespace
+    first, second = _json('listing_page_1.json'), _json('listing_page_1.json')
+    first['data'].update(totalPage=2, list=first['data']['list'][:1])
+    second['data'].update(totalPage=2, pageNum=2, list=second['data']['list'][1:])
+    def response(payload):
+        return SimpleNamespace(url='https://job.xiaohongshu.com'+xiaohongshu.TARGET_PATH,
+            status=200, request=SimpleNamespace(method='POST', post_data_json={'pageNum':payload['data']['pageNum']}),
+            json=lambda:payload)
+    calls,closed=[],[]
+    class ResponseContext:
+        def __init__(self,value):self.value=value
+        def __enter__(self):return self
+        def __exit__(self,*args):pass
+    class Page:
+        def set_default_timeout(self,*args):pass
+        def route(self,*args):pass
+        def goto(self,*args,**kw):pass
+        url=xiaohongshu.ENTRY_URL
+        def locator(self,*args):return SimpleNamespace(click=lambda:None)
+        def expect_response(self,matcher,**kw):
+            candidates=[response(first)] if not calls else [response(first),response(second)]
+            calls.append(True)
+            return ResponseContext(next(r for r in candidates if matcher(r)))
+    browser=SimpleNamespace(new_context=lambda:SimpleNamespace(new_page=lambda:Page()),close=lambda:closed.append(True))
+    class Context:
+        def __enter__(self):return SimpleNamespace(chromium=SimpleNamespace(launch=lambda **kw:browser))
+        def __exit__(self,*args):pass
+    monkeypatch.setitem(sys.modules,'playwright.sync_api',SimpleNamespace(
+        sync_playwright=Context,Error=RuntimeError,TimeoutError=TimeoutError))
+    pages=xiaohongshu._fetch_xiaohongshu_pages_sync()
+    assert [p['data']['pageNum'] for p in pages]==[1,2]
+    assert len(XiaohongshuSocialAdapter(fetch_pages=lambda:pages).fetch_jobs())==2
+    assert closed==[True]

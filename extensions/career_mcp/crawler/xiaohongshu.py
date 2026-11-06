@@ -156,6 +156,22 @@ def fetch_xiaohongshu_pages() -> list[Mapping[str, object]]:
         return executor.submit(_fetch_xiaohongshu_pages_sync).result()
 
 
+def _listing_response_matches(response: object, page_number: int) -> bool:
+    """Ignore late duplicate requests from the previous public UI page."""
+    parsed = urlparse(getattr(response, "url", ""))
+    request = getattr(response, "request", None)
+    if (parsed.scheme != "https" or parsed.hostname != "job.xiaohongshu.com"
+            or parsed.path != TARGET_PATH or getattr(response, "status", None) != 200
+            or getattr(request, "method", None) != "POST"):
+        return False
+    try:
+        body = request.post_data_json
+    except (ValueError, TypeError, AttributeError):
+        return False
+    return (isinstance(body, dict) and type(body.get("pageNum")) is int
+            and body["pageNum"] == page_number)
+
+
 def _fetch_xiaohongshu_pages_sync() -> list[Mapping[str, object]]:
     try:
         from playwright.sync_api import Error as PlaywrightError
@@ -191,7 +207,7 @@ def _fetch_xiaohongshu_pages_sync() -> list[Mapping[str, object]]:
                             "Xiaohongshu browser crawl exceeded 110 seconds"
                         )
                     with page.expect_response(
-                        lambda response: TARGET_PATH in response.url,
+                        lambda response: _listing_response_matches(response, 1),
                         timeout=30_000,
                     ) as first_info:
                         page.goto(
@@ -230,7 +246,7 @@ def _fetch_xiaohongshu_pages_sync() -> list[Mapping[str, object]]:
                                 "Xiaohongshu browser crawl exceeded 110 seconds"
                             )
                         with page.expect_response(
-                            lambda response: TARGET_PATH in response.url,
+                            lambda response: _listing_response_matches(response, page_number),
                             timeout=10_000,
                         ) as page_info:
                             page.locator("li.ant-pagination-next").click()
