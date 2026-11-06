@@ -75,6 +75,8 @@
 
 最后一批收藏修复的本地证据：20 项聚焦测试通过，前端 349 通过／2 跳过，类型检查和独立 alpha 构建通过，产物不含固定本地后端地址，源码凭据扫描未发现泄漏。在独立 1438 测试实例用明确标注的合成下线岗位验证：收藏箱可见、备注保留，返回全部岗位隐藏下线记录。合成岗位不是官网真实采集证据。
 
+本次交接文档同步的[检查 42182141962](https://github.com/qiushibang/OpenCareer/actions/runs/42182141962)首次出现前端既有用例 `preserves the selected job and unsaved application note during background imports` 失败：预期未保存备注保留，实际为空，位置 `CareerJobsView.test.tsx:165`。文档提交未修改功能代码；按用户暂停要求只重跑失败检查，未放宽断言或修复产品。接手时读取该检查最终结果；即使重跑通过，也应保留这一时序风险记录，不据此保证不存在竞态。
+
 真实来源进展、完整测试范围与历史计数见验收记录。Docker 编排仅做配置检查，本机未实际启动容器；真人语音、Windows OCR（Optical Character Recognition，光学字符识别）及未配置的真实渠道仍有各自验收边界。
 
 ## 6. 只在原开发机存在的断点与证据
