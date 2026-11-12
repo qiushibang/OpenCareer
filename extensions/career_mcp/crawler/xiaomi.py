@@ -70,30 +70,38 @@ class XiaomiPublicApiAdapter:
         if first.total > 0 and not first.jobs:
             raise XiaomiApiError("Xiaomi API returned an empty page for a positive total")
 
-        jobs = list(first.jobs)
-        seen_ids = {job.external_job_id for job in jobs}
-        for page_num in range(2, first.page_total + 1):
-            page = parse_xiaomi_listing(
-                self._fetch_page(page_num),
-                observed_at=observed_at,
-            )
-            if (
-                page.page_num != page_num
-                or page.page_size != first.page_size
-                or page.page_total != first.page_total
-                or page.total != first.total
-            ):
-                raise XiaomiApiError("Xiaomi API pagination changed during crawl")
-            if page.total > 0 and not page.jobs:
-                raise XiaomiApiError(
-                    "Xiaomi API returned an empty page for a positive total"
+        jobs: dict[str, JobSnapshot] = {}
+        # The official endpoint can move records between pages while its
+        # total stays fixed. Reconcile a bounded number of complete passes.
+        for attempt in range(3):
+            for page_num in range(1, first.page_total + 1):
+                page = first if attempt == 0 and page_num == 1 else parse_xiaomi_listing(
+                    self._fetch_page(page_num), observed_at=observed_at,
                 )
-            for job in page.jobs:
-                if job.external_job_id in seen_ids:
-                    raise XiaomiApiError("duplicate jobId across pages")
-                seen_ids.add(job.external_job_id)
-                jobs.append(job)
-        return jobs
+                if (
+                    page.page_num != page_num
+                    or page.page_size != first.page_size
+                    or page.page_total != first.page_total
+                    or page.total != first.total
+                ):
+                    raise XiaomiApiError("Xiaomi API pagination changed during crawl")
+                if page.total > 0 and not page.jobs:
+                    raise XiaomiApiError(
+                        "Xiaomi API returned an empty page for a positive total"
+                    )
+                for job in page.jobs:
+                    previous = jobs.get(job.external_job_id)
+                    if previous is not None and previous != job:
+                        raise XiaomiApiError("Xiaomi job content changed during crawl")
+                    jobs[job.external_job_id] = job
+                if len(jobs) > first.total:
+                    raise XiaomiApiError("Xiaomi unique job count exceeds official total")
+            if len(jobs) == first.total:
+                return list(jobs.values())
+        raise XiaomiApiError(
+            "duplicate jobId across pages or missing jobs after three passes: "
+            f"expected {first.total}, collected {len(jobs)} unique jobs"
+        )
 
 
 def fetch_public_page(page_num: int) -> Mapping[str, object]:

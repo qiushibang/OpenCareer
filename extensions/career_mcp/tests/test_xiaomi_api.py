@@ -183,6 +183,7 @@ def test_fixture_adapter_creates_jobs_through_existing_pipeline(tmp_path):
     payload = _fixture_payload()
     payload["data"]["pageSize"] = 100
     payload["data"]["pageTotal"] = 1
+    payload["data"]["total"] = len(payload["data"]["list"])
     adapter = XiaomiPublicApiAdapter(
         fetch_page=lambda _: payload,
         clock=lambda: OBSERVED_AT,
@@ -284,3 +285,20 @@ def test_fetch_public_page_rejects_unexpected_redirect_host(monkeypatch):
 
     with pytest.raises(XiaomiAccessRestricted, match="redirect host"):
         fetch_public_page(1)
+
+
+def test_adapter_recovers_jobs_omitted_by_unstable_pagination():
+    responses = iter([
+        _page(1, 3, "a"), _page(2, 3, "a"), _page(3, 3, "c"),
+        _page(1, 3, "a"), _page(2, 3, "b"), _page(3, 3, "c"),
+    ])
+    adapter = XiaomiPublicApiAdapter(fetch_page=lambda _: next(responses), clock=lambda: OBSERVED_AT)
+    assert {job.external_job_id for job in adapter.fetch_jobs()} == {"a", "b", "c"}
+
+
+def test_adapter_rejects_conflicting_records_for_same_job():
+    first, second = _page(1, 2, "same"), _page(2, 2, "same")
+    second["data"]["list"][0]["title"] = "Changed title"
+    adapter = XiaomiPublicApiAdapter(fetch_page=lambda n: {1:first, 2:second}[n])
+    with pytest.raises(XiaomiApiError, match="job content changed"):
+        adapter.fetch_jobs()
