@@ -171,9 +171,12 @@ textarea.oc-field { min-height:84px; resize:vertical; line-height:1.6; }
 
 /* Subscription task configuration */
 .oc-sub-config { display:grid; gap:0; border:1px solid var(--line); border-radius:16px; background:var(--panel); box-shadow:var(--shadow-xs); overflow:hidden; }
+.oc-sub-config-head { padding:14px 18px 12px; border-bottom:1px solid var(--line); }
+.oc-sub-config-head h3 { margin:0; font-size:14.5px; font-weight:600; color:var(--ink); letter-spacing:-.01em; }
+.oc-sub-config-head p { margin:3px 0 0; font-size:12px; color:var(--muted); }
 .oc-sub-block { padding:16px 18px; }
 .oc-sub-block + .oc-sub-block { border-top:1px solid var(--line); }
-.oc-sub-block:first-child { background:color-mix(in srgb,var(--paper) 55%,var(--panel)); }
+.oc-sub-config-head + .oc-sub-block { background:color-mix(in srgb,var(--paper) 55%,var(--panel)); }
 .oc-sub-block-head { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
 .oc-sub-block-head h4 { margin:0; font-size:13.5px; font-weight:600; color:var(--ink); }
 .oc-sub-step { width:20px; height:20px; display:grid; place-items:center; flex:none; border-radius:999px; background:var(--accent-soft); color:var(--accent); font-size:11px; font-weight:700; font-variant-numeric:tabular-nums; }
@@ -323,6 +326,9 @@ textarea.oc-field { min-height:84px; resize:vertical; line-height:1.6; }
 .oc-page h1 { font-size:clamp(22px,2vw,28px); letter-spacing:-.04em; line-height:1.3; font-weight:650; }
 .oc-page-subtitle { margin-top:4px; font-size:12.5px; color:var(--muted); }
 .oc-page > header, .oc-page-head { padding:28px 28px 20px; }
+/* Headers host popovers (table settings, filters); keep them above the scrolling content
+   even while the entrance animation gives the header its own stacking context. */
+.oc-page > header { position:relative; z-index:20; }
 .oc-page-head h2 { font-size:26px; font-weight:650; line-height:1.3; letter-spacing:-.04em; }
 .oc-page-head { margin:0 0 24px; padding:0; }
 .oc-page header h2,.oc-drawer h2 { line-height:1.4; letter-spacing:-.02em; }

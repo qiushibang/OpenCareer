@@ -343,7 +343,7 @@ export function ApplicationsView({initialId,onBack,backLabel}:{initialId?:string
       </>:<p role="status" className="text-sm text-muted">正在读取申请详情…</p>}</div>
     </div>
       {draft&&<div className="oc-drawer-foot shrink-0">
-        <span className="oc-drawer-state" data-state={busy?"busy":dirty?"dirty":savedAt?"saved":"clean"}>{busy?"正在保存…":dirty?"有未保存的修改 · 已暂存在本机":savedAt?"已保存":"所有修改已保存"}</span>
+        <span role="status" className="oc-drawer-state" data-state={busy?"busy":dirty?"dirty":savedAt?"saved":"clean"}>{busy?"正在保存…":dirty?"有未保存的修改 · 已暂存在本机":savedAt?"申请已保存":"所有修改已保存"}</span>
         <div className="flex gap-2">
           <button type="button" className="oc-btn" disabled={busy} onClick={cancelDrawer}>取消</button>
           <button type="submit" form="application-fields" className={PRIMARY} disabled={busy||!dirty}>保存申请信息</button>

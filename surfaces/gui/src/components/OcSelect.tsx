@@ -195,6 +195,7 @@ export function OcSelect({
                   key={option.value}
                   id={`${listId}-${index}`}
                   data-index={index}
+                  data-value={option.value}
                   role="option"
                   aria-selected={isSelected}
                   className={"oc-select-option" + (index === active ? " is-active" : "") + (isSelected ? " is-selected" : "")}

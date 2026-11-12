@@ -11,13 +11,22 @@ import pytest
 from test_local_installation import free_port, running
 
 
+def choose(scope, page, label, value):
+    """Pick a value in the custom OcSelect: open the combobox, click the option by value."""
+    scope.get_by_role("combobox", name=label, exact=True).click()
+    page.get_by_role("listbox", name=label, exact=True).locator(f'[data-value="{value}"]').click()
+
+
 @pytest.mark.skipif(os.environ.get("OPENCAR_TEST_LOCAL_BROWSER") != "1",
                     reason="opt-in real browser smoke test")
 def test_catalog_uses_ordinary_tool_steps_and_only_renders_final_answer(tmp_path):
     from playwright.sync_api import sync_playwright, expect
     result_id = "a" * 32
-    result = {"total":54, "evaluated_matches":54, "warnings":[], "has_more":False,
-              "query":{"condition":{"all":[]}}, "jobs":[
+    # The stored result is complete (offset 0, all rows), so the chat card uses it
+    # directly instead of re-querying the empty local catalog.
+    beijing = {"condition":{"all":[{"field":"locations","op":"in","values":["北京"]}]}}
+    result = {"total":54, "evaluated_matches":54, "warnings":[], "has_more":False, "offset":0,
+              "query":beijing, "jobs":[
                   {"id":str(i), "title":f"测试产品实习岗位{i+1}", "company":{"name":"测试公司"},
                    "locations":["北京"], "first_seen_at":"2026-10-29T00:00:00Z",
                    "match_evidence":[], "source_url":f"https://jobs.example/{i}"} for i in range(54)]}
@@ -40,13 +49,18 @@ def test_catalog_uses_ordinary_tool_steps_and_only_renders_final_answer(tmp_path
             page.get_by_text("工具结果折叠验收", exact=True).click()
             expect(page.get_by_role("button", name=re.compile("匹配 54 个岗位"))).to_have_count(0)
             expect(page.get_by_role("region", name="岗位工具结果明细")).to_have_count(0)
-            expect(page.get_by_text("测试产品实习岗位1", exact=True)).to_have_count(0)
+            # The chat shows the first 10 matches as cards, never the raw tool payload.
+            cards = page.get_by_role("region", name="代表岗位")
+            expect(cards.get_by_text("测试产品实习岗位1", exact=True)).to_be_visible()
+            expect(cards.get_by_text("测试产品实习岗位10", exact=True)).to_be_visible()
+            expect(page.get_by_text("测试产品实习岗位11", exact=True)).to_have_count(0)
+            expect(cards.get_by_text("共 54 个", exact=True)).to_be_visible()
             expect(page.get_by_text("已整合岗位结果，以下是我的建议。", exact=True)).to_be_visible()
             screenshot = tmp_path / "catalog-collapsed.png"
             page.screenshot(path=str(screenshot))
             print(f"Collapsed UI proof: {screenshot}")
             with page.expect_request(lambda req:"/career/catalog/search" in req.url and req.method=="POST") as navigation:
-                page.get_by_role("button",name="在岗位雷达查看",exact=True).click()
+                page.get_by_role("button",name="查看更多岗位",exact=True).click()
             assert navigation.value.post_data_json["condition"]=={"all":[{"field":"locations","op":"in","values":["北京"]}]}
             expect(page.get_by_text("清除组合条件",exact=True)).to_be_visible()
             page.route("**/_openworker/v1/career/jobs/sync",lambda route:route.fulfill(json={"ok":True,"queued":True}) if route.request.method=="POST" else route.continue_())
@@ -64,6 +78,7 @@ def test_catalog_uses_ordinary_tool_steps_and_only_renders_final_answer(tmp_path
                 route.fulfill(json={"ok":True,"data":{"state":"connected","channel":channel}})
             page.route("**/_openworker/v1/career/job-subscriptions/feishu-pairing",lambda route:route.fulfill(json={"ok":True,"data":{"session_id":"b"*48,"qr_image":"data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnLz4=","verification_url":"https://accounts.feishu.cn/fixture","interval":5,"expires_in":600}}))
             page.route("**/_openworker/v1/career/job-subscriptions/feishu-pairing/"+"b"*48+"/poll",approved)
+            dialog.get_by_text("推送渠道 · 尚未连接",exact=True).click()  # Channel settings are folded by design.
             dialog.get_by_role("button",name="生成飞书授权二维码",exact=True).click()
             expect(dialog.get_by_alt_text("飞书官方授权二维码")).to_be_visible()
             expect(dialog.get_by_text("我的飞书（扫码绑定）",exact=True).first).to_be_visible(timeout=12000)
@@ -124,7 +139,7 @@ def test_shared_catalog_is_visible_without_a_model_or_local_crawl(tmp_path):
             page.get_by_role("button", name="组合筛选", exact=True).click()
             form = page.get_by_role("form", name="组合岗位筛选")
             form.get_by_label("工作城市", exact=True).fill("北京")
-            form.get_by_label("岗位职能", exact=True).select_option("algorithm")
+            choose(form, page, "岗位职能", "algorithm")
             form.get_by_role("button", name="应用筛选").click()
             expect(page.get_by_text("1 个岗位", exact=True)).to_be_visible()
             page.get_by_role("button", name="岗位订阅", exact=True).click()
@@ -145,8 +160,9 @@ def test_shared_catalog_is_visible_without_a_model_or_local_crawl(tmp_path):
               window.dispatchEvent(new Event('opencareer:catalog-open'));
             }""",subscription_condition)
             expect(dialog.get_by_text("确认 AI 整理的订阅",exact=True)).to_be_visible()
+            dialog.get_by_text("推送渠道 · 尚未连接",exact=True).click()  # Channel settings are folded by design.
             dialog.get_by_text("其他平台／已有群机器人",exact=True).click()
-            dialog.get_by_label("机器人平台").select_option("wecom")
+            choose(dialog, page, "机器人平台", "wecom")
             dialog.get_by_text("名称与安全设置（按平台要求填写）",exact=True).click()
             dialog.get_by_label("渠道名称（可选）", exact=True).fill("本地验收测试群")
             dialog.get_by_label("官方 Webhook 地址").fill("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=fixture")

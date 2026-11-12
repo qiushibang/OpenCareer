@@ -101,7 +101,8 @@ export function JobSubscriptionsPanel({condition, semanticQuery, today=false, in
         </div>
       {confirming && (() => {
         const ready = chosen.some(id=>channels.some(channel=>channel.id===id));
-        return <section className="oc-sub-config">
+        return <section className="oc-sub-config" aria-labelledby="oc-sub-config-title">
+          <header className="oc-sub-config-head"><h3 id="oc-sub-config-title">确认 AI 整理的订阅</h3><p>核对条件与推送设置，保存后可先预览匹配结果再启用。</p></header>
           <div className="oc-sub-block">
             <div className="oc-sub-block-head">
               <span className="oc-sub-step">1</span><h4>订阅条件</h4>

@@ -7,6 +7,12 @@ import pytest
 from test_local_installation import free_port, running
 
 
+def choose(scope, page, label, value):
+    """Pick a value in the custom OcSelect: open the combobox, click the option by value."""
+    scope.get_by_role("combobox", name=label, exact=True).click()
+    page.get_by_role("listbox", name=label, exact=True).locator(f'[data-value="{value}"]').click()
+
+
 @pytest.mark.skipif(os.environ.get("OPENCAR_TEST_LOCAL_BROWSER") != "1", reason="opt-in real browser acceptance")
 def test_application_table_interview_notes_download_and_restart(tmp_path):
     from playwright.sync_api import sync_playwright, expect
@@ -38,28 +44,28 @@ def test_application_table_interview_notes_download_and_restart(tmp_path):
             expect(panel.get_by_role("textbox",name="公司名称",exact=True)).to_have_count(0)
             expect(panel.get_by_role("textbox",name="工作地点",exact=True)).to_have_count(0)
             expect(panel.get_by_role("textbox",name="职位描述",exact=True)).to_have_count(0)
-            expect(panel.get_by_label("当前阶段",exact=True)).to_have_js_property("tagName","SELECT")
+            expect(panel.get_by_role("combobox",name="当前阶段",exact=True)).to_be_visible()
             expect(panel.get_by_role("link",name="打开原始岗位链接")).to_be_visible()
             expect(panel.get_by_text("个人期望薪资（含单位）",exact=True)).to_have_count(0)
             panel.get_by_label("申请备注", exact=True).fill("原备注保留；准备二面")
             panel.get_by_role("button", name="保存申请信息", exact=True).click()
-            expect(panel.get_by_role("status")).to_contain_text("申请已保存")
+            expect(panel.get_by_text("申请已保存", exact=True)).to_be_visible()
             panel.get_by_role("button", name="新增面试", exact=True).click()
             form = panel.get_by_role("form", name="真实面试记录")
-            form.get_by_label("面试轮次", exact=True).select_option("一面")
+            choose(form, page, "面试轮次", "一面")
             form.get_by_label("面试日期年",exact=True).fill("2026")
             expect(form.get_by_label("面试日期月",exact=True)).to_be_focused()
             form.get_by_label("面试日期月",exact=True).fill("11")
             expect(form.get_by_label("面试日期日",exact=True)).to_be_focused()
             form.get_by_label("面试日期日",exact=True).fill("04")
             expect(form.get_by_label("安排状态", exact=True)).to_have_count(0)
-            form.get_by_label("本轮结果", exact=True).select_option("pending")
+            choose(form, page, "本轮结果", "pending")
             expect(form.get_by_label("面试问题", exact=True)).to_have_count(0)
             form.get_by_label("面经", exact=True).fill("一面的完整面经与改进点")
             form.get_by_role("button", name="保存", exact=True).click()
             expect(panel.get_by_role("heading",name="一面",exact=True)).to_be_visible()
             panel.get_by_role("button", name="新增面试", exact=True).click()
-            form.get_by_label("面试轮次", exact=True).select_option("二面")
+            choose(form, page, "面试轮次", "二面")
             form.get_by_label("面经", exact=True).fill("二面的面经单独保留")
             form.get_by_role("button", name="保存", exact=True).click()
             expect(panel.get_by_role("heading",name="二面",exact=True)).to_be_visible()
@@ -117,7 +123,7 @@ def test_manual_table_edit_filter_export_and_backend_restart(tmp_path):
                 create.get_by_label("工作地点",exact=True).fill("北京")
                 create.get_by_role("button",name="创建申请",exact=True).click()
                 panel=page.get_by_role("dialog",name="申请详情")
-                panel.get_by_label("申请状态",exact=True).select_option("applied")
+                choose(panel, page, "申请状态", "applied")
                 panel.get_by_label("投递日期年",exact=True).fill("2026")
                 panel.get_by_label("投递日期月",exact=True).fill("10")
                 panel.get_by_label("投递日期日",exact=True).fill("30")
@@ -127,11 +133,11 @@ def test_manual_table_edit_filter_export_and_backend_restart(tmp_path):
                 expect(panel.get_by_role("heading",name="下一步",exact=True)).to_have_count(0)
                 panel.get_by_label("申请备注",exact=True).fill("手动新增且重启后保留")
                 panel.get_by_role("button",name="保存申请信息",exact=True).click()
-                expect(panel.get_by_role("status")).to_contain_text("申请已保存")
+                expect(panel.get_by_text("申请已保存", exact=True)).to_be_visible()
                 panel.get_by_role("button",name="关闭详情",exact=True).click()
-                cell=page.get_by_label("当前阶段：评测产品经理",exact=True)
+                cell_label="当前阶段：评测产品经理"
                 with page.expect_response(lambda r:r.request.method=="PATCH" and "/applications/" in r.url):
-                    cell.select_option("笔试")
+                    choose(page, page, cell_label, "笔试")
                 page.get_by_text("表格设置",exact=True).click()
                 page.get_by_label("月薪酬",exact=True).uncheck()
                 page.get_by_text("表格设置",exact=True).click()
@@ -141,7 +147,7 @@ def test_manual_table_edit_filter_export_and_backend_restart(tmp_path):
                 expect(page.get_by_role("button",name="评测产品经理",exact=True)).to_be_visible()
                 page.get_by_label("勾选申请：评测产品经理",exact=True).check()
                 page.get_by_text("表格设置",exact=True).click()
-                page.get_by_label("Excel导出范围",exact=True).select_option("selected")
+                choose(page, page, "Excel导出范围", "selected")
                 page.get_by_text("表格设置",exact=True).click()
                 with page.expect_download() as download:
                     page.get_by_role("button",name="导出 Excel",exact=True).click()
