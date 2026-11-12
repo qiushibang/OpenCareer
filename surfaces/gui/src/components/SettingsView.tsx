@@ -298,7 +298,7 @@ function VoiceInputSection() {
           <div className={CARD + " p-4 text-[13px] text-muted"}>本地语音输入设置仅在 OpenCareer 桌面应用中可用。</div>
         ) : (
           <>
-          <div className="rounded-xl border border-green-200 bg-green-50/70 px-4 py-3 text-[12.5px] text-green-800">
+          <div className="rounded-xl border border-okLine bg-okSoft px-4 py-3 text-[12.5px] text-ok">
             <span className="font-medium">隐私优先。</span> 音频仅在录音时保存在内存中，并在本地完成转写。
           </div>
 
@@ -308,10 +308,10 @@ function VoiceInputSection() {
               <div className="min-w-0 flex-1">
                 <div className="text-[13.5px] font-medium">此设备</div>
                 <div className="text-[12px] text-muted mt-1">{status?.device_summary || "正在检查兼容性…"}</div>
-                {status?.compatibility_reason && <div className="text-[12px] text-red-600 mt-1.5">{status.compatibility_reason}</div>}
+                {status?.compatibility_reason && <div className="text-[12px] text-danger mt-1.5">{status.compatibility_reason}</div>}
               </div>
               {status && (
-                <span className={"text-[11.5px] px-2 py-1 rounded-full " + (status.supported ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600")}>
+                <span className={"text-[11.5px] px-2 py-1 rounded-full " + (status.supported ? "bg-okSoft text-ok" : "bg-dangerSoft text-danger")}>
                   {status.supported ? "● 兼容" : "不支持"}
                 </span>
               )}
@@ -335,9 +335,9 @@ function VoiceInputSection() {
               </div>
               {status?.model_verified ? (
                 <>
-                  <span className="text-[11.5px] px-2 py-1 rounded-full bg-green-50 text-green-700">已验证</span>
+                  <span className="text-[11.5px] px-2 py-1 rounded-full bg-okSoft text-ok">已验证</span>
                   <button className={BTN_BORDERED} onClick={() => void repair()}>修复</button>
-                  <button className="text-[12px] text-red-600 px-2 py-2" onClick={() => void remove()}>删除</button>
+                  <button className="text-[12px] text-danger px-2 py-2" onClick={() => void remove()}>删除</button>
                 </>
               ) : downloading ? (
                 <button className={BTN_BORDERED} onClick={() => void cancelDownload()}>取消</button>
@@ -357,14 +357,14 @@ function VoiceInputSection() {
 
           <div className={CARD}>
             <div className="p-4 flex items-center gap-3">
-              <Icon name="mic" size={18} className={ready ? "text-green-600" : "text-muted"} />
+              <Icon name="mic" size={18} className={ready ? "text-ok" : "text-muted"} />
               <div className="min-w-0 flex-1">
                 <div className="text-[13.5px] font-medium">麦克风测试</div>
                 <div className="text-[12px] text-muted mt-0.5">
                   {ready ? "麦克风和本地转写引擎工作正常。" : "录制一小段语音以启用输入框麦克风。"}
                 </div>
               </div>
-              {ready && <span className="text-[11.5px] px-2 py-1 rounded-full bg-green-50 text-green-700">● 就绪</span>}
+              {ready && <span className="text-[11.5px] px-2 py-1 rounded-full bg-okSoft text-ok">● 就绪</span>}
               <button className={BTN_BORDERED} disabled={!status?.supported || !status?.model_verified || phase === "transcribing"} onClick={() => void toggleTest()}>
                 {status?.recording ? "停止并检查" : phase === "transcribing" ? "正在转写…" : ready ? "再次测试" : "测试麦克风"}
               </button>
@@ -373,7 +373,7 @@ function VoiceInputSection() {
             {testTranscript && <div className="border-t border-line bg-paper/50 px-4 py-3 text-[13px]">“{testTranscript}”</div>}
           </div>
 
-          {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[12px] text-red-700">{error}</div>}
+          {error && <div role="alert" className="rounded-lg border border-dangerLine bg-dangerSoft px-3 py-2.5 text-[12px] text-danger">{error}</div>}
           </>
         )}
       </div>
@@ -460,7 +460,7 @@ function InterviewVoiceProviderCard() {
           className={
             "rounded-full px-2 py-1 text-[11px] " +
             (status?.configured
-              ? "bg-green-50 text-green-700"
+              ? "bg-okSoft text-ok"
               : "bg-paper text-muted")
           }
         >
@@ -504,14 +504,14 @@ function InterviewVoiceProviderCard() {
       </div>
       <p className="mt-3 text-[11.5px] text-muted">{/* 产品说明移至代码：新版只填写 API Key；旧版填写 App ID 和 Access Token。已保存的 Secret 不会回显。 */}密钥已保存后不回显。</p>
       {error && (
-        <div role="alert" className="mt-3 text-[12px] text-red-700">
+        <div role="alert" className="mt-3 text-[12px] text-danger">
           {error}
         </div>
       )}
       <div className="mt-4 flex justify-end gap-2">
         {status?.configured && (
           <button
-            className="px-3 py-2 text-[12px] text-red-600"
+            className="px-3 py-2 text-[12px] text-danger"
             disabled={busy}
             onClick={() => void remove()}
           >
@@ -717,7 +717,7 @@ function TrustedWorkspacesCard() {
                 </div>
               </div>
               <button
-                className="text-[12px] text-red-600 px-2 py-1"
+                className="text-[12px] text-danger px-2 py-1"
                 onClick={() => void revoke(workspace.workspace)}
               >
                 撤销
@@ -1017,9 +1017,7 @@ function ContextBarCard() {
         <span>
           <span className="block text-[13px] text-ink">显示上下文窗口进度条</span>
           <span className="block text-[12px] text-muted">
-            A small meter showing how full the model&rsquo;s context window is. Turn it off
-            to show this session&rsquo;s token total instead; either way the full breakdown
-            is one click away.
+            用小进度条显示当前模型上下文窗口的占用情况。关闭后改为显示本次对话的累计 Token 数；两种方式都可以点击查看完整明细。
           </span>
         </span>
       </label>

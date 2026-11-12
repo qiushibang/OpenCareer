@@ -22,7 +22,6 @@ from zoneinfo import ZoneInfo
 from .config import CareerConfig
 from .crawler.adapters import JobAdapter, default_adapters, default_resumable_adapters
 from .database.migrations import connect
-from .domain.crawler import SourceDescriptor
 from .local_jobs import LocalJobSync, worker_lock, read_status
 from .public_catalog_format import publish_stream, public_job
 from .services.public_catalog import PublicCatalogSync

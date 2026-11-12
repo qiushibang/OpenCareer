@@ -7,7 +7,6 @@ import json
 from importlib import resources
 from importlib.metadata import version as package_version
 from pathlib import Path, PurePosixPath
-from typing import Any
 
 from ..domain.ocr import OcrLine
 from ..services.resume_ocr import ResumeOcrError

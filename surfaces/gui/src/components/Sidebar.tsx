@@ -479,8 +479,11 @@ export function Sidebar(props: Props) {
   // right-side indicators, with the ⋮ actions kebab revealed on hover. Shared by the flat
   // layout's Pinned and Recent sections. Personas are disabled for the first release; when
   // they return, surface the persona on hover (e.g. in the row tooltip) — not as a subtitle.
+  // A full-page surface (radar, applications, profile) owns the "current" highlight; the last
+  // conversation is remembered but must not read as a second selected item.
+  const onCareerPage = !!(props.careerJobsActive || props.careerApplicationsActive || props.careerProfileActive);
   const cardRow = (s: SessionInfo) => {
-    const active = s.session_id === props.activeSession;
+    const active = s.session_id === props.activeSession && !onCareerPage;
     const title = s.title || s.session_id;
     const editing = editingId === s.session_id;
     const commitRename = () => {
@@ -491,12 +494,9 @@ export function Sidebar(props: Props) {
     return (
       <div
         key={s.session_id}
-        className={
-          "group w-full flex items-center gap-2.5 px-2 py-2 rounded-lg cursor-pointer text-left " +
-          (active
-            ? "bg-ink/[0.055]"
-            : "hover:bg-paper")
-        }
+        className="sidebar-session group w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg cursor-pointer text-left"
+        data-active={active ? "true" : undefined}
+        aria-current={active ? "true" : undefined}
         title={editing ? undefined : title}
         onClick={() => {
           if (!editing) props.onSelectSession(s.session_id, s.workspace, s.agent);
@@ -520,7 +520,7 @@ export function Sidebar(props: Props) {
           />
         ) : (
           <>
-            <span className="min-w-0 flex-1 block truncate text-[13px] font-medium">
+            <span className={"min-w-0 flex-1 block truncate text-[13px] " + (active ? "font-medium" : "")}>
               {title}
             </span>
             <span
@@ -546,7 +546,7 @@ export function Sidebar(props: Props) {
   const pinnedBand = () =>
     pinnedSessions.length > 0 ? (
       <div>
-        <div className="px-1.5 text-[10.5px] uppercase tracking-[0.07em] text-faint font-semibold mb-1">
+        <div className="sidebar-section-label">
           已置顶
         </div>
         <div className="space-y-0.5">
@@ -556,8 +556,8 @@ export function Sidebar(props: Props) {
     ) : null;
 
   const recentHeader = () => (
-    <div className="relative flex items-center justify-between px-1.5 mb-1" data-testid="recent-header">
-      <span className="text-[10.5px] uppercase tracking-[0.07em] text-faint font-semibold">
+    <div className="relative flex items-center justify-between" data-testid="recent-header">
+      <span className="sidebar-section-label">
         最近对话
       </span>
     </div>
@@ -706,7 +706,7 @@ export function Sidebar(props: Props) {
                         </div>
                       ) : (
                         <div className="px-2 py-1.5 pl-[19px] text-[12px] text-faint leading-snug">
-                          No conversations in this project yet.
+                          此项目暂无对话。
                         </div>
                       ))}
                   </div>
@@ -718,7 +718,7 @@ export function Sidebar(props: Props) {
           <div className="space-y-0.5">
             {mine.filter(matches).length === 0 ? (
               <div className="px-2 py-1.5 text-[12px] text-faint leading-snug">
-                {normalizedQuery ? "No matching conversations." : "No conversations yet."}
+                {normalizedQuery ? "没有匹配的对话。" : "暂无对话。"}
               </div>
             ) : (
               <>
@@ -792,7 +792,7 @@ export function Sidebar(props: Props) {
             <Icon name="sidebar" size={16} />
           </button>
         )}
-        <div className="brand-wordmark text-[16px]">OpenCareer</div>
+        <div className="brand-wordmark text-[16px]"><span className="brand-mark" aria-hidden="true">O</span><span>OpenCareer</span></div>
         <button
           className="ml-auto w-7 h-7 grid place-items-center rounded-md text-faint hover:text-ink hover:bg-paper shrink-0"
           aria-label="搜索对话"
@@ -803,9 +803,9 @@ export function Sidebar(props: Props) {
         </button>
       </div>
 
-      <div className="px-3 pt-2">
+      <div className="px-3 pt-1">
         <button
-          className="newsplit-primary w-full rounded-lg bg-accent px-3 py-2 text-left text-[13px] font-medium text-white hover:opacity-95 flex items-center gap-2"
+          className="newsplit-primary w-full bg-accent text-left text-[13px] font-medium text-white flex items-center gap-2"
           onClick={() => props.onNewSession("career")}
         >
           <Icon name="plus" size={15} className="shrink-0" />
@@ -813,40 +813,44 @@ export function Sidebar(props: Props) {
         </button>
       </div>
 
-      <div className="px-2.5 mt-2">
-        <button
-          className={
-            "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-left hover:bg-paper hover:text-ink " +
-            (props.careerJobsActive ? "text-ink bg-paper" : "text-muted")
-          }
-          aria-current={props.careerJobsActive?"page":undefined}
-          data-testid="nav-career-jobs"
-          onClick={props.onOpenCareerJobs}
-        >
-          <Icon name="briefcase" size={15} className="shrink-0" />
-          <span className="flex-1">岗位雷达</span>
-        </button>
-      </div>
-
-      {props.onOpenCareerApplications && <div className="px-2.5 mt-1"><button className={"w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-left hover:bg-paper hover:text-ink " + (props.careerApplicationsActive ? "text-ink bg-paper" : "text-muted")} onClick={props.onOpenCareerApplications} aria-current={props.careerApplicationsActive?"page":undefined} data-testid="nav-career-applications"><Icon name="table" size={15} className="shrink-0"/><span className="flex-1">求职进度</span></button></div>}
-      <div className="px-2.5 mt-1">
-        <button
-          className={
-            "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-left hover:bg-paper hover:text-ink " +
-            (props.careerProfileActive ? "text-ink bg-paper" : "text-muted")
-          }
-          aria-current={props.careerProfileActive?"page":undefined}
-          data-testid="nav-career-profile"
-          onClick={props.onOpenCareerProfile}
-        >
-          <Icon name="file" size={15} className="shrink-0" />
-          <span className="flex-1">我的求职档案</span>
-        </button>
-      </div>
+      <nav className="px-2.5 mt-4" aria-label="工作台">
+        <div className="sidebar-nav-label">工作台</div>
+        <div className="space-y-0.5">
+          <button
+            className="sidebar-nav-item"
+            aria-current={props.careerJobsActive?"page":undefined}
+            data-testid="nav-career-jobs"
+            onClick={props.onOpenCareerJobs}
+          >
+            <Icon name="briefcase" size={16} />
+            <span className="flex-1">岗位雷达</span>
+          </button>
+          {props.onOpenCareerApplications && (
+            <button
+              className="sidebar-nav-item"
+              onClick={props.onOpenCareerApplications}
+              aria-current={props.careerApplicationsActive?"page":undefined}
+              data-testid="nav-career-applications"
+            >
+              <Icon name="table" size={16} />
+              <span className="flex-1">求职进度</span>
+            </button>
+          )}
+          <button
+            className="sidebar-nav-item"
+            aria-current={props.careerProfileActive?"page":undefined}
+            data-testid="nav-career-profile"
+            onClick={props.onOpenCareerProfile}
+          >
+            <Icon name="file" size={16} />
+            <span className="flex-1">我的求职档案</span>
+          </button>
+        </div>
+      </nav>
 
       {/* Scroll area: Pinned band + the RECENT header (with group/filter control), then the body —
           grouped (per-persona accordion) or flat (chronological list). */}
-      <div className="flex-1 overflow-y-auto px-2.5 mt-3 pb-2">
+      <div className="flex-1 overflow-y-auto px-2.5 mt-5 pb-2">
         <div className="space-y-4">
           {pinnedBand()}
           <div>
@@ -879,16 +883,19 @@ export function Sidebar(props: Props) {
         </div>
       </div>
 
-      <div className="px-2.5 py-2 border-t border-line">
-        <button className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-left text-muted hover:bg-paper hover:text-ink" onClick={() => openSupport()}>帮助与反馈</button>
+      <div className="sidebar-footer px-2.5 py-2 space-y-0.5">
+        <button className="sidebar-nav-item" onClick={() => openSupport()}>
+          <Icon name="help" size={16} />
+          <span className="flex-1">帮助与反馈</span>
+        </button>
         <button
-          className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-left text-muted hover:bg-paper hover:text-ink"
+          className="sidebar-nav-item"
           data-testid="nav-settings"
           onClick={props.onManage}
         >
-          <Icon name="gear" size={15} className="shrink-0" />
+          <Icon name="gear" size={16} />
           <span className="flex-1">设置</span>
-          <span className="text-[11px] text-faint" aria-hidden>⌘ ,</span>
+          <span className="oc-kbd" aria-hidden>⌘ ,</span>
         </button>
       </div>
 

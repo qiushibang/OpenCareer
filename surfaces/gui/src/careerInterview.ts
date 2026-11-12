@@ -149,7 +149,3 @@ export const interviewAnswerPrompt = (
   expectedVersion,
   answer,
 ).prompt;
-
-export const interviewFinishPrompt = (sessionId: string) =>
-  `结束模拟面试。interview_session_id=${sessionId}。` +
-  "加载 mock-interview Skill，完成评价并生成面试报告。";

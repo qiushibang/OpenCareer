@@ -121,7 +121,7 @@ export function ConversationInterviewBar({
       </div>
 
       {error && (
-        <div className="mt-2 flex items-center gap-2 text-red-700">
+        <div className="mt-2 flex items-center gap-2 text-danger">
           <span>{error}</span>
           <button
             type="button"

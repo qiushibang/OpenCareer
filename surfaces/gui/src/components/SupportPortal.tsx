@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getHostedAuthSession, isAlpha, supportRequest, type SupportFeedback } from "../api";
 import { SUPPORT_FAULT, SUPPORT_OPEN, SUPPORT_RESET, safeDiagnosticId } from "../supportFault";
+import { OcSelect } from "./OcSelect";
 import { SupportAdmin } from "./SupportAdmin";
 
 const nonce = () => crypto.randomUUID().replace(/-/g, "");
@@ -129,7 +130,7 @@ export function SupportPortal() {
         {tab === "new" ? <>
           <p className="text-sm text-muted mb-4">{/* 产品说明移至代码：请描述操作步骤、实际结果与期望结果。不要填写密钥、验证码、完整简历或私密对话；不会自动采集这些内容。 */}请描述问题，勿填写密钥、验证码或完整简历。</p>
           {!authenticated && <p className="text-sm text-muted mb-3">{/* 产品说明移至代码：未登录也可以提交，但匿名反馈不会绑定账号，也无法在账号内追踪回复。 */}匿名反馈无法追踪回复。</p>}
-          <label className="block mb-3">反馈类型<select className="input w-full mt-1" disabled={busy} value={kind} onChange={(event) => { setKind(event.target.value as typeof kind); draftNonce.current = nonce(); }}><option value="bug">功能故障</option><option value="suggestion">体验建议</option><option value="other">其他</option></select></label>
+          <div className="flex flex-col gap-1 mb-3">反馈类型<OcSelect ariaLabel="反馈类型" disabled={busy} value={kind} onChange={(value) => { setKind(value as typeof kind); draftNonce.current = nonce(); }} options={[{ value: "bug", label: "功能故障", tone: "red" }, { value: "suggestion", label: "体验建议", tone: "blue" }, { value: "other", label: "其他", tone: "gray" }]} /></div>
           <label className="block">问题描述<textarea className="input w-full mt-1 min-h-36" maxLength={2000} disabled={busy} value={description} onChange={(event) => { setDescription(event.target.value); draftNonce.current = nonce(); }} /></label>
           <p className="text-xs text-muted text-right mt-1">{description.length} / 2000</p>
           {authenticated && requestId && <div className="text-xs text-muted mt-3 break-all">附带脱敏排查编号：{requestId}<button className="btn ml-2" onClick={() => { setCandidateId(undefined); setRequestId(undefined); }}>移除</button></div>}

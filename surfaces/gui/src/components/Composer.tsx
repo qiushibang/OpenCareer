@@ -538,7 +538,7 @@ export function Composer(props: Props) {
       if (dictation?.recording) {
         setDictationBusy("正在识别…");
         const transcript = await stopDictation();
-        if (transcript === null) throw new Error("Could not transcribe your recording.");
+        if (transcript === null) throw new Error("未能识别这段录音，请重试。");
         if (transcript.trim()) {
           setText((draft) => (draft.trim() ? `${draft.trimEnd()} ${transcript.trim()}` : transcript.trim()));
         }
@@ -548,17 +548,17 @@ export function Composer(props: Props) {
       }
 
       const status = dictation || (await getDictationStatus());
-      if (!status) throw new Error("Voice dictation is unavailable.");
+      if (!status) throw new Error("当前设备暂不支持语音输入。");
       if (!status.supported || !status.model_verified || !status.test_passed) {
         props.onConfigureVoiceInput?.();
         return;
       }
       setDictationBusy("正在请求麦克风权限…");
       const recording = await startDictation();
-      if (!recording?.recording) throw new Error("Could not start the microphone.");
+      if (!recording?.recording) throw new Error("无法启动麦克风，请检查系统权限。");
       setDictation(recording);
     } catch (error) {
-      setDictationError(error instanceof Error ? error.message : "Voice dictation is unavailable.");
+      setDictationError(error instanceof Error ? error.message : "当前设备暂不支持语音输入。");
       const status = await getDictationStatus();
       if (status) setDictation(status);
     } finally {
@@ -588,7 +588,7 @@ export function Composer(props: Props) {
       {props.approvalSlot}
 
       {dictationError && (
-        <div className="max-w-3xl mx-auto mb-2 px-1 text-[12px] text-red-600" role="alert">
+        <div className="max-w-3xl mx-auto mb-2 px-1 text-[12px] text-danger" role="alert">
           {dictationError}
         </div>
       )}
@@ -883,7 +883,7 @@ export function Composer(props: Props) {
           )}
 
           {dictation?.recording && (
-            <span className="text-[11.5px] text-red-600">正在录音</span>
+            <span className="text-[11.5px] text-danger">正在录音</span>
           )}
           {dictationBusy && (
             <span className="text-[11.5px] text-accent">{dictationBusy}</span>
@@ -952,7 +952,7 @@ export function Composer(props: Props) {
             <button
               className={
                 iconBtn +
-                (dictation?.recording ? " bg-red-50 text-red-600 hover:bg-red-100" : "") +
+                (dictation?.recording ? " bg-dangerSoft text-danger hover:bg-dangerSoft/70" : "") +
                 (dictationBusy ? " opacity-60" : "") +
                 (!voiceReady && !dictation?.recording ? " opacity-40" : "")
               }

@@ -2,11 +2,19 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { DateInput } from "./DateInput";
 import { Icon } from "./Icon";
 import { InterviewDateInput } from "./InterviewDateInput";
-import { estimatedAnnualSalary, APPLICATION_STATUS, PRIORITY, RECRUITMENT, STAGES, ROUNDS, interviewNotes, ROUND_RESULT, ROUND_KIND, applicationsRequest, chinaDate, localDateTime, fromLocalDateTime, type Application, type ApplicationInterview, type ApplicationPage, type ApplicationFilters, type ApplicationExport } from "../applications";
+import { OcSelect, Tag, type OcSelectOption, type TagTone } from "./OcSelect";
+import { estimatedAnnualSalary, APPLICATION_STATUS, PRIORITY, RECRUITMENT, STAGES, ROUNDS, interviewNotes, ROUND_RESULT, ROUND_KIND, STATUS_TONE, PRIORITY_TONE, RECRUITMENT_TONE, STAGE_TONE, ROUND_RESULT_TONE, applicationsRequest, chinaDate, localDateTime, fromLocalDateTime, type Application, type ApplicationInterview, type ApplicationPage, type ApplicationFilters, type ApplicationExport } from "../applications";
 
-const INPUT = "w-full rounded-lg border border-line bg-panel px-2.5 py-2 text-[13px] text-ink outline-none focus:border-accent";
-const BUTTON = "rounded-lg border border-line bg-panel px-3 py-2 text-[12px] hover:bg-paper disabled:opacity-40";
-const LABEL = "text-xs text-muted space-y-1 block";
+const INPUT = "oc-field";
+const BUTTON = "oc-btn oc-btn-sm";
+const PRIMARY = "oc-btn oc-btn-primary";
+const LABEL = "text-xs text-muted space-y-1.5 block font-medium";
+const FIELD_TONES: Record<string,Record<string,TagTone>> = {status:STATUS_TONE,priority:PRIORITY_TONE,recruitment_type:RECRUITMENT_TONE,stage:STAGE_TONE};
+/** Options for OcSelect; an unknown stored value stays selectable as "（原记录）". */
+function selectOptions(values:Record<string,string>, current:string, tones?:Record<string,TagTone>): OcSelectOption[] {
+  const list = Object.entries(values).map(([value,label])=>({value,label,tone:tones?.[value]}));
+  return current && !Object.prototype.hasOwnProperty.call(values,current) ? [{value:current,label:current+"（原记录）"},...list] : list;
+}
 const VIEWS: Record<string,string> = {all:"全部申请",preparing:"准备投递",interviewing:"面试中",offer:"Offer",closed:"已结束",archived:"已归档"};
 const COLUMNS: [string,string][] = [["company","公司"],["title","岗位名称"],["location","工作地点"],["status","申请状态"],["stage","当前阶段"],["applied_on","投递日期"],["monthly_salary","月薪酬"],["salary_months","发薪月数"],["annual_salary","预计年薪酬"],["priority","优先级"],["recruitment_type","招聘类型"],["batch","招聘批次"],["department","部门"],["business_line","业务线"],["channel","来源渠道"],["resume_label","简历版本"]];
 const DEFAULT_COLUMNS = COLUMNS.slice(0,10).map(c=>c[0]);
@@ -30,7 +38,6 @@ function preferences(): {filters:ApplicationFilters;columns:string[];group:strin
   catch { return {filters:{view:"all"},columns:DEFAULT_COLUMNS,group:""}; }
 }
 function pick(record: Record<string,unknown>, keys: string[]): Record<string,unknown> { return Object.fromEntries(keys.map(key=>[key,record[key]])); }
-function Options({values}:{values:Record<string,string>}) { return <>{Object.entries(values).map(([key,label])=><option key={key} value={key}>{label}</option>)}</>; }
 
 function useModalKeys(active:boolean,label:string,onClose:()=>void) {
   const close=useRef(onClose);close.current=onClose;
@@ -68,16 +75,21 @@ function InlineCell({record,field,save}:{record:Application;field:string;save:(r
   };
   const choices = field==="status"?APPLICATION_STATUS:field==="priority"?PRIORITY:field==="recruitment_type"?RECRUITMENT:field==="stage"?STAGES:null;
   if(field==="annual_salary")return <span className="px-1.5 text-muted">{record.annual_salary?Number(record.annual_salary).toLocaleString("zh-CN")+" 元／年":"待填写薪酬"}</span>;
-  if(record.job_id&&OFFICIAL_FIELDS.has(field))return <span className="px-1.5 text-muted">{field==="recruitment_type"?(RECRUITMENT[value]||value):value||"官网未提供"}</span>;
+  if(record.job_id&&OFFICIAL_FIELDS.has(field)){
+    if(field==="recruitment_type") return RECRUITMENT_TONE[value] ? <span className="px-1.5"><Tag tone={RECRUITMENT_TONE[value]}>{RECRUITMENT[value]}</Tag></span> : <span className="px-1.5 text-faint">—</span>;
+    return <span className="px-1.5 text-muted">{value||"官网未提供"}</span>;
+  }
   return <div className="application-inline-cell min-w-0">
-    {choices ? <span className="application-select"><select aria-label={`${COLUMNS.find(c=>c[0]===field)?.[1]}：${record.title}`} value={draft} disabled={busy} style={{width:`${Math.max(6,Array.from(choices[draft]||draft||"未记录").length*2)+4}ch`}} onChange={e=>{setDraft(e.target.value);dirty.current=true;void persist(e.target.value);}}>{draft&&!Object.prototype.hasOwnProperty.call(choices,draft)&&<option value={draft}>{draft}（原记录）</option>}<Options values={choices}/></select><Icon name="chevronDown" size={14}/></span>
+    {choices ? <OcSelect variant="cell" menuMinWidth={168} ariaLabel={`${COLUMNS.find(c=>c[0]===field)?.[1]}：${record.title}`} value={draft} disabled={busy} options={selectOptions(choices,draft,FIELD_TONES[field])} onChange={value=>{setDraft(value);dirty.current=true;void persist(value);}}/>
       : ["applied_on","deadline_on"].includes(field) ? <DateInput compact label={`${COLUMNS.find(c=>c[0]===field)?.[1]}：${record.title}`} value={draft} disabled={busy} onFocus={()=>{focused.current=true;}} onDirty={()=>{dirty.current=true;}} onChange={date=>setDraft(date||"")} onCommit={date=>{focused.current=false;void persist(date||"");}}/>
-      : <input aria-label={`${COLUMNS.find(c=>c[0]===field)?.[1]}：${record.title}`} className={"w-full rounded-md border bg-transparent px-1.5 py-1.5 focus:border-accent "+(error?"border-red-400":"border-transparent")} type={field==="next_at"?"datetime-local":"text"} value={draft} disabled={busy} onFocus={()=>{focused.current=true;}} onChange={e=>{setDraft(e.target.value);dirty.current=true;}} onBlur={()=>{focused.current=false;void persist(draft);}} onKeyDown={e=>{if(e.key==="Enter")e.currentTarget.blur();}}/>}
+      : <input aria-label={`${COLUMNS.find(c=>c[0]===field)?.[1]}：${record.title}`} className={"w-full rounded-md border bg-transparent px-1.5 py-1.5 focus:border-accent "+(error?"border-danger":"border-transparent")} type={field==="next_at"?"datetime-local":"text"} value={draft} disabled={busy} onFocus={()=>{focused.current=true;}} onChange={e=>{setDraft(e.target.value);dirty.current=true;}} onBlur={()=>{focused.current=false;void persist(draft);}} onKeyDown={e=>{if(e.key==="Enter")e.currentTarget.blur();}}/>}
     {error && <p role="alert" className="text-xs text-danger max-w-[230px]">{error}（草稿保留，刷新记录后重试）</p>}
   </div>;
 }
 
-export function ApplicationsView({initialId}:{initialId?:string|null}) {
+const DRAWER_SECTIONS: [string,string][] = [["application-fields","申请信息"],["application-interviews","面试与面经"],["application-history","进度历史"]];
+
+export function ApplicationsView({initialId,onBack,backLabel}:{initialId?:string|null;onBack?:()=>void;backLabel?:string}) {
   const [pref] = useState(preferences);
   const [filters,setFilters] = useState<ApplicationFilters>(pref.filters), [columns,setColumns] = useState(pref.columns), [group] = useState(pref.group);
   const [page,setPage] = useState<ApplicationPage|null>(null), [offset,setOffset] = useState(0), [loading,setLoading] = useState(false), [error,setError] = useState("");
@@ -88,6 +100,33 @@ export function ApplicationsView({initialId}:{initialId?:string|null}) {
   const [round,setRound] = useState<Record<string,unknown>|null>(null), [roundDirty,setRoundDirty] = useState(false);
   const [exportScope,setExportScope] = useState("filtered"), [exportBusy,setExportBusy] = useState(false), [exportNotice,setExportNotice] = useState("");
   const requestNumber = useRef(0), exportNumber = useRef(0);
+  const drawerBody = useRef<HTMLDivElement>(null);
+  const [activeSection,setActiveSection] = useState(DRAWER_SECTIONS[0][0]);
+  const [savedAt,setSavedAt] = useState<number|null>(null);
+  const jumpTo = (id:string) => {
+    const body=drawerBody.current, target=document.getElementById(id);
+    if(!body||!target)return;
+    if(target instanceof HTMLDetailsElement)target.open=true;
+    setActiveSection(id);
+    body.scrollTo({top:target.getBoundingClientRect().top-body.getBoundingClientRect().top+body.scrollTop-16,behavior:"smooth"});
+  };
+  const spySections = () => {
+    const body=drawerBody.current;if(!body)return;
+    const top=body.getBoundingClientRect().top+48;
+    let current=DRAWER_SECTIONS[0][0];
+    for(const [id] of DRAWER_SECTIONS){const node=document.getElementById(id);if(node&&node.getBoundingClientRect().top<=top)current=id;}
+    if(body.scrollTop+body.clientHeight>=body.scrollHeight-4)current=DRAWER_SECTIONS[DRAWER_SECTIONS.length-1][0];
+    setActiveSection(current);
+  };
+  // Cancel = close without saving. Unsaved drafts are discarded only after confirmation.
+  const cancelDrawer = () => {
+    if(busy)return;
+    if(dirty||roundDirty){
+      if(!window.confirm("放弃未保存的修改并关闭？"))return;
+      if(selectedId){sessionStorage.removeItem("application-draft:"+selectedId);sessionStorage.removeItem("application-round-draft:"+selectedId+":"+(round?.id||"new"));}
+    }
+    setDirty(false);setRoundDirty(false);setRound(null);setSelectedId(null);
+  };
   const draftBase = useRef<Record<string,unknown>|null>(null);
   const filterKey = JSON.stringify(filters);
   const load = useCallback(async () => {
@@ -102,7 +141,7 @@ export function ApplicationsView({initialId}:{initialId?:string|null}) {
   useEffect(()=>{if(initialId)setSelectedId(initialId);},[initialId]);
   useEffect(()=>{
     if(!selectedId){setDetail(null);setDraft(null);return;}
-    let live=true;setDetail(null);setDraft(null);setRound(null);setDirty(false);setPanelNotice("");
+    let live=true;setDetail(null);setDraft(null);setRound(null);setDirty(false);setPanelNotice("");setSavedAt(null);setActiveSection(DRAWER_SECTIONS[0][0]);
     applicationsRequest<Application>("/"+encodeURIComponent(selectedId)).then(record=>{
       if(!live)return;setDetail(record);draftBase.current=pick(record,APP_FIELDS);
       try { const saved=JSON.parse(sessionStorage.getItem("application-draft:"+selectedId)||"null");if(saved){draftBase.current=saved._base||pick(record,APP_FIELDS);setDraft({...record,...Object.fromEntries(Object.entries(saved).filter(([key])=>!record.job_id||!OFFICIAL_FIELDS.has(key)))});setDirty(true);setPanelNotice("已恢复未保存的申请草稿，请检查后保存。");return;} } catch{/* no draft */}
@@ -114,7 +153,7 @@ export function ApplicationsView({initialId}:{initialId?:string|null}) {
   useEffect(()=>{if(roundDirty&&round&&selectedId){try{sessionStorage.setItem("application-round-draft:"+selectedId+":"+(round.id||"new"),JSON.stringify(round));}catch{setPanelNotice("请及时保存本轮面经，浏览器暂存空间不足。");}}},[round,roundDirty,selectedId]);
   useEffect(()=>{const warn=(event:BeforeUnloadEvent)=>{if(dirty||roundDirty)event.preventDefault();};window.addEventListener("beforeunload",warn);return()=>window.removeEventListener("beforeunload",warn);},[dirty,roundDirty]);
   const filter = (key:string,value:string|boolean) => setFilters(previous=>({...previous,[key]:value}));
-  const change = (key:string,value:unknown) => {setDraft(previous=>previous?{...previous,[key]:value}:previous);setDirty(true);};
+  const change = (key:string,value:unknown) => {setDraft(previous=>previous?{...previous,[key]:value}:previous);setDirty(true);setSavedAt(null);};
   const open = (id:string|null) => {if(busy)return;if((dirty||roundDirty)&&!window.confirm("有未保存内容，已暂存在本机浏览器。仍要切换吗？"))return;setSelectedId(id);setRoundDirty(false);};
   useModalKeys(!!selectedId||!!newRecord,newRecord?"新建申请":"申请详情",()=>{
     if(busy)return;
@@ -142,7 +181,7 @@ export function ApplicationsView({initialId}:{initialId?:string|null}) {
     event.preventDefault();if(!draft)return;setBusy(true);setPanelNotice("");
     try{
       await applicationsRequest<Application>("/"+draft.id,{expected_version:draft.version,...pick(draft,APP_FIELDS.filter(key=>!draft.job_id||!OFFICIAL_FIELDS.has(key)))},"PATCH");
-      const saved=await applicationsRequest<Application>("/"+draft.id);setDetail(saved);setDraft(saved);draftBase.current=pick(saved,APP_FIELDS);setDirty(false);sessionStorage.removeItem("application-draft:"+draft.id);setPanelNotice("申请已保存");await load();
+      const saved=await applicationsRequest<Application>("/"+draft.id);setDetail(saved);setDraft(saved);draftBase.current=pick(saved,APP_FIELDS);setDirty(false);sessionStorage.removeItem("application-draft:"+draft.id);setSavedAt(Date.now());await load();
     }catch(e){setPanelNotice((e as Error).message);}finally{setBusy(false);}
   };
   const beginRound = (existing?:ApplicationInterview) => {
@@ -197,77 +236,123 @@ export function ApplicationsView({initialId}:{initialId?:string|null}) {
   for(const record of page?.records||[]){const key=group?String(record[group]||"未记录"):"";grouped.set(key,[...(grouped.get(key)||[]),record]);}
   const field = (key:string,label:string,type="text",options?:Record<string,string>) => {
     const value=String(draft?.[key]??"");
-    if(draft?.job_id&&OFFICIAL_FIELDS.has(key))return <div className={LABEL} key={key}><span>{label}</span><p className="text-[13px] text-ink py-2 break-words" aria-label={label}>{options?(options[value]||value||"官网未提供"):value||"官网未提供"}</p></div>;
-    return <label className={LABEL} key={key}><span>{label}</span>{options?<select aria-label={label} className={INPUT} value={value} onChange={e=>change(key,e.target.value)}>{value&&!Object.prototype.hasOwnProperty.call(options,value)&&<option value={value}>{value}（原记录）</option>}<Options values={options}/></select>:type==="date"?<DateInput label={label} value={value} onChange={date=>change(key,date)}/>:<input aria-label={label} className={INPUT} placeholder={key==="monthly_salary"?"例如 25000 或 25k":undefined} type={type} value={type==="datetime-local"?localDateTime(draft?.[key]):value} onChange={e=>change(key,type==="datetime-local"?fromLocalDateTime(e.target.value):type==="date"?e.target.value||null:e.target.value)}/>}</label>;
+    if (draft?.job_id && OFFICIAL_FIELDS.has(key)) {
+      return <div className={LABEL} key={key}>
+        <span>{label}</span>
+        {key === "source_url" && /^https?:\/\//i.test(value)
+          ? <a aria-label={label} href={value} target="_blank" rel="noopener noreferrer" className="block py-1 text-[13px] text-accent underline underline-offset-2 break-all">{value}</a>
+          : <p className="text-[13px] text-ink py-1 break-words" aria-label={label}>{options?.[value] || value || "官网未提供"}</p>}
+      </div>;
+    }
+    if (options) return <div className={LABEL} key={key}><span>{label}</span><OcSelect ariaLabel={label} value={value} options={selectOptions(options,value,FIELD_TONES[key])} onChange={next=>change(key,next)}/></div>;
+    return <label className={LABEL} key={key}><span>{label}</span>{type==="date"?<DateInput label={label} value={value} onChange={date=>change(key,date)}/>:<input aria-label={label} className={INPUT} placeholder={key==="monthly_salary"?"例如 25000 或 25k":undefined} type={type} value={type==="datetime-local"?localDateTime(draft?.[key]):value} onChange={e=>change(key,type==="datetime-local"?fromLocalDateTime(e.target.value):type==="date"?e.target.value||null:e.target.value)}/>}</label>;
   };
 
   return <main className="oc-page oc-applications flex-1 min-w-0 flex flex-col bg-panel text-ink" aria-label="求职进度工作台">
     <header className="border-b border-line px-6 pt-6 pb-4 space-y-4">
       <div className="application-heading">
-        <h1 className="text-xl font-semibold">求职进度</h1>
+        <h1>求职进度</h1>
         <div className="application-actions">
-          <button className={BUTTON} disabled={loading} onClick={()=>void load()}>刷新记录</button>
-          <button className={BUTTON} disabled={exportBusy||!page} onClick={()=>void exportFile()}>导出 Excel</button>
+          <button className={BUTTON} disabled={loading} onClick={()=>void load()}><Icon name="refresh" size={13}/>刷新记录</button>
+          <button className={BUTTON} disabled={exportBusy||!page} onClick={()=>void exportFile()}><Icon name="download" size={13}/>导出 Excel</button>
           {exportBusy&&<button className={BUTTON} onClick={()=>{exportNumber.current++;setExportBusy(false);setExportNotice("已取消本次导出准备。");}}>取消导出</button>}
-          <button className="rounded-lg bg-accent px-4 py-2 text-sm text-white" onClick={()=>setNewRecord({company:"",title:"",location:"",jd:"",notes:""})}>新建申请</button>
+          <button className={PRIMARY+" oc-btn-sm"} onClick={()=>setNewRecord({company:"",title:"",location:"",jd:"",notes:""})}><Icon name="plus" size={14}/>新建申请</button>
         </div>
       </div>
-      <div className="application-summary flex gap-5 text-xs text-muted"><span>未归档 <strong className="text-ink">{page?.summary.active||0}</strong></span><span>面试中 <strong className="text-ink">{page?.summary.interviewing||0}</strong></span><span>Offer <strong className="text-ink">{page?.summary.offer||0}</strong></span><span className="ml-auto">{page?.total??0} 条申请</span></div>
+      <div className="application-summary flex items-center gap-6"><span className="oc-stat">未归档 <strong>{page?.summary.active||0}</strong></span><span className="oc-stat">面试中 <strong>{page?.summary.interviewing||0}</strong></span><span className="oc-stat">Offer <strong className="!text-ok">{page?.summary.offer||0}</strong></span><span className="ml-auto text-xs text-muted tabular-nums">{page?.total??0} 条申请</span></div>
       {/* Common filtering uses one status view plus a single keyword. Column and export
           preferences live separately; retired filters never remain active invisibly. */}
       <div className="application-controls">
-        <div className="flex gap-1" role="group" aria-label="申请视图">{Object.entries(VIEWS).map(([key,label])=><button key={key} className={"rounded-md px-3 py-1.5 text-xs "+((filters.view||"all")===key?"bg-accent text-white":"hover:bg-paper text-muted")} onClick={()=>filter("view",key)}>{label}</button>)}</div>
-        <input aria-label="搜索求职申请" placeholder="搜索公司、岗位或备注" className={INPUT+" application-search"} value={String(filters.q||"")} onChange={e=>filter("q",e.target.value)}/>
-        <details className="relative application-table-settings"><summary className={BUTTON+" cursor-pointer list-none"}>表格设置</summary><div className="application-settings-menu absolute right-0 top-11 z-30 w-80 border border-line rounded-xl bg-panel p-4 shadow-lg space-y-4">
+        <div className="oc-seg" role="group" aria-label="申请视图">{Object.entries(VIEWS).map(([key,label])=><button key={key} aria-pressed={(filters.view||"all")===key} onClick={()=>filter("view",key)}>{label}</button>)}</div>
+        <div className="oc-search application-search"><Icon name="search" size={14}/><input aria-label="搜索求职申请" placeholder="搜索公司、岗位或备注" className={INPUT} value={String(filters.q||"")} onChange={e=>filter("q",e.target.value)}/></div>
+        <details className="relative application-table-settings"><summary className={BUTTON+" cursor-pointer list-none"}><Icon name="sliders" size={13}/>表格设置</summary><div className="application-settings-menu absolute right-0 top-10 z-30 w-80 border border-line rounded-[14px] bg-panel p-4 shadow-float space-y-4">
           <fieldset><legend className="text-xs font-medium mb-3">显示列</legend><div className="grid grid-cols-2 gap-2">{COLUMNS.map(([key,label])=><label className="text-xs flex gap-2" key={key}><input type="checkbox" disabled={["company","title"].includes(key)} checked={columns.includes(key)||["company","title"].includes(key)} onChange={e=>setColumns(previous=>e.target.checked?[...previous,key]:previous.filter(v=>v!==key))}/>{label}</label>)}</div></fieldset>
-          <label className={LABEL}><span>Excel 导出范围</span><select aria-label="Excel导出范围" className={INPUT} value={exportScope} onChange={e=>setExportScope(e.target.value)}><option value="filtered">当前列表（所有分页）</option><option value="all">全部申请（含归档）</option><option value="selected">勾选记录（{selected.size}）</option></select></label>
+          <div className={LABEL}><span>Excel 导出范围</span><OcSelect ariaLabel="Excel导出范围" value={exportScope} onChange={setExportScope} options={[{value:"filtered",label:"当前列表（所有分页）"},{value:"all",label:"全部申请（含归档）"},{value:"selected",label:`勾选记录（${selected.size}）`}]}/></div>
         </div></details>
       </div>
-      {exportNotice&&<p role="status" className="text-xs text-muted">{exportNotice}</p>}{error&&<p role="alert" className="text-sm text-danger">{error}<button onClick={()=>void load()} className="ml-2 underline">重试</button></p>}
+      {exportNotice&&<p role="status" className="text-xs text-muted">{exportNotice}</p>}{error&&<p role="alert" className="oc-alert"><span className="flex-1">{error}</span><button onClick={()=>void load()} className="shrink-0 font-medium underline underline-offset-2">重试</button></p>}
     </header>
     <div className="flex-1 overflow-auto relative">
-      <table className="application-table table-fixed border-separate border-spacing-0 text-xs" style={{width:SELECTION_WIDTH+visible.reduce((width,[key])=>width+columnWidth(key),0)}} aria-label="求职申请总表"><colgroup><col style={{width:SELECTION_WIDTH}}/>{visible.map(([key])=><col key={key} style={{width:columnWidth(key)}}/>)}</colgroup><thead className="sticky top-0 z-20 bg-paper"><tr><th className="application-frozen px-3 py-3" style={{left:0}}><input aria-label="勾选本页申请" type="checkbox" checked={!!page?.records.length&&page.records.every(row=>selected.has(row.id))} onChange={e=>setSelected(previous=>{const next=new Set(previous);for(const row of page?.records||[]){if(e.target.checked)next.add(row.id);else next.delete(row.id);}return next;})}/></th>{visible.map(([key,label])=><th key={key} data-application-column={key} style={{left:frozenOffset(key)}} className={"border-b border-line px-3 py-3 text-left font-medium "+(frozenOffset(key)!==undefined?"application-frozen":"")}><button onClick={()=>setFilters(previous=>({...previous,sort:key,descending:previous.sort===key?!previous.descending:false}))}>{label} {filters.sort===key?(filters.descending?"↓":"↑"):""}</button></th>)}</tr></thead><tbody>
+      <table className="application-table table-fixed border-separate border-spacing-0 text-xs" style={{width:`max(${SELECTION_WIDTH+visible.reduce((width,[key])=>width+columnWidth(key),0)}px, 100%)`}} aria-label="求职申请总表"><colgroup><col style={{width:SELECTION_WIDTH}}/>{visible.map(([key])=><col key={key} style={{width:columnWidth(key)}}/>)}<col/></colgroup><thead className="sticky top-0 z-20 bg-paper"><tr><th className="application-frozen border-b border-line px-3 py-3" style={{left:0}}><input aria-label="勾选本页申请" type="checkbox" checked={!!page?.records.length&&page.records.every(row=>selected.has(row.id))} onChange={e=>setSelected(previous=>{const next=new Set(previous);for(const row of page?.records||[]){if(e.target.checked)next.add(row.id);else next.delete(row.id);}return next;})}/></th>{visible.map(([key,label])=><th key={key} data-application-column={key} style={{left:frozenOffset(key)}} className={"border-b border-line px-3 py-3 text-left font-medium "+(frozenOffset(key)!==undefined?"application-frozen":"")}><button onClick={()=>setFilters(previous=>({...previous,sort:key,descending:previous.sort===key?!previous.descending:false}))}>{label} {filters.sort===key?(filters.descending?"↓":"↑"):""}</button></th>)}<th className="border-b border-line" aria-hidden="true"/></tr></thead><tbody>
         {[...grouped].map(([name,records])=><GroupRows key={name} name={name} group={group} records={records} columns={visible} selected={selected} setSelected={setSelected} open={open} save={inlineSave}/>)}
       </tbody></table>
-      {!loading&&!page?.records.length&&<div className="py-20 text-center"><p className="text-sm">{filters.q||filters.status||filters.view!=="all"?"当前条件没有申请记录":"从一个心仪岗位开始"}</p><p className="mt-2 text-xs text-muted">{/* 产品说明移至代码：在岗位雷达加入求职进度，或手动记录内推、招聘网站和其他机会。 */}从岗位雷达加入，或手动新建。</p></div>}
+      {!loading&&!page?.records.length&&<div className="oc-empty py-20"><div className="oc-empty-icon"><Icon name="table" size={20}/></div><strong>{filters.q||filters.status||filters.view!=="all"?"当前条件没有申请记录":"从一个心仪岗位开始"}</strong><p>{/* 产品说明移至代码：在岗位雷达加入求职进度，或手动记录内推、招聘网站和其他机会。 */}从岗位雷达加入，或手动新建。</p>{!(filters.q||filters.status||filters.view!=="all")&&<button className={PRIMARY+" oc-btn-sm mt-2"} onClick={()=>setNewRecord({company:"",title:"",location:"",jd:"",notes:""})}><Icon name="plus" size={14}/>新建申请</button>}</div>}
       {loading&&<p role="status" className="px-6 py-3 text-xs text-muted">正在读取申请…</p>}
     </div>
-    <footer className="border-t border-line px-6 py-3 flex justify-between items-center text-xs text-muted"><span>{page?.total?`${offset+1}–${Math.min(offset+50,page.total)} / ${page.total}`:"0 条申请"}</span>{/* 表内修改后离开单元格即可保存；状态和错误在编辑单元格旁显示。 */}<div className="flex gap-2"><button className={BUTTON} disabled={!offset||loading} onClick={()=>setOffset(n=>Math.max(0,n-50))}>上一页</button><button className={BUTTON} disabled={!page||offset+50>=page.total||loading} onClick={()=>setOffset(n=>n+50)}>下一页</button></div></footer>
+    <footer className="border-t border-line px-6 py-3 flex justify-between items-center text-xs text-muted tabular-nums"><span>{page?.total?`${offset+1}–${Math.min(offset+50,page.total)} / ${page.total}`:"0 条申请"}</span>{/* 表内修改后离开单元格即可保存；状态和错误在编辑单元格旁显示。 */}<div className="flex gap-2"><button className={BUTTON} disabled={!offset||loading} onClick={()=>setOffset(n=>Math.max(0,n-50))}>上一页</button><button className={BUTTON} disabled={!page||offset+50>=page.total||loading} onClick={()=>setOffset(n=>n+50)}>下一页</button></div></footer>
 
-    {newRecord&&<div className="fixed inset-0 z-40 bg-black/20 flex justify-center items-center p-5"><section role="dialog" aria-modal="true" aria-label="新建申请" className="bg-panel rounded-2xl shadow-xl p-6 w-full max-w-xl max-h-[90vh] overflow-auto"><h2 className="font-semibold text-lg mb-4">手动新建申请</h2><form onSubmit={e=>void create(e)} className="space-y-3">{([['company','公司名称'],['title','岗位名称'],['location','工作地点']] as const).map(([key,label])=><label className={LABEL} key={key}>{label}<input required={key!=="location"} className={INPUT} value={newRecord[key]} onChange={e=>setNewRecord(previous=>({...previous,[key]:e.target.value}))}/></label>)}<label className={LABEL}>职位描述<textarea aria-label="职位描述" className={INPUT+" h-28"} value={newRecord.jd} onChange={e=>setNewRecord(previous=>({...previous,jd:e.target.value}))}/></label><label className={LABEL}>申请备注<textarea aria-label="申请备注" className={INPUT} value={newRecord.notes} onChange={e=>setNewRecord(previous=>({...previous,notes:e.target.value}))}/></label><p className="text-xs text-muted">先加入个人计划，尚未代表已在招聘网站投递。</p>{error&&<p role="alert" className="text-danger text-sm">{error}</p>}<div className="flex gap-2 justify-end"><button type="button" className={BUTTON} onClick={()=>setNewRecord(null)}>取消</button><button className="rounded-lg bg-accent text-white px-4 py-2 text-sm" disabled={busy}>创建申请</button></div></form></section></div>}
+    {newRecord&&<div className="oc-dialog-backdrop z-40"><section role="dialog" aria-modal="true" aria-label="新建申请" className="oc-dialog max-w-xl max-h-[90vh]"><h2 className="font-semibold text-[17px] tracking-[-0.02em] mb-5">手动新建申请</h2><form onSubmit={e=>void create(e)} className="space-y-3">{([['company','公司名称'],['title','岗位名称'],['location','工作地点']] as const).map(([key,label])=><label className={LABEL} key={key}>{label}<input required={key!=="location"} className={INPUT} value={newRecord[key]} onChange={e=>setNewRecord(previous=>({...previous,[key]:e.target.value}))}/></label>)}<label className={LABEL}>职位描述<textarea aria-label="职位描述" className={INPUT+" h-28"} value={newRecord.jd} onChange={e=>setNewRecord(previous=>({...previous,jd:e.target.value}))}/></label><label className={LABEL}>申请备注<textarea aria-label="申请备注" className={INPUT} value={newRecord.notes} onChange={e=>setNewRecord(previous=>({...previous,notes:e.target.value}))}/></label><p className="text-xs text-muted">先加入个人计划，尚未代表已在招聘网站投递。</p>{error&&<p role="alert" className="oc-alert">{error}</p>}<div className="flex gap-2 justify-end pt-2"><button type="button" className="oc-btn" onClick={()=>setNewRecord(null)}>取消</button><button className={PRIMARY} disabled={busy}>创建申请</button></div></form></section></div>}
 
-    {selectedId&&<div className="fixed inset-0 z-40 bg-black/10 flex justify-end"><section role="dialog" aria-modal="true" aria-label="申请详情" className="oc-drawer w-full max-w-[760px] h-full overflow-y-auto bg-panel border-l border-line shadow-xl">
-      <div className="sticky top-0 z-20 border-b border-line bg-panel px-6 py-4 flex items-start justify-between"><div><h2 className="font-semibold text-lg">{detail?.title||"申请详情"}</h2><p className="text-xs text-muted mt-1">{detail?.company} · {detail?.location||"地点未记录"}</p></div><button className={BUTTON} aria-label="关闭详情" disabled={busy} onClick={()=>open(null)}>关闭</button></div>
-      <div className="px-6 py-2 border-b border-line bg-panel flex gap-3 sticky top-[85px] z-20">{[["application-fields","申请信息"],["application-interviews","面试与面经"],["application-history","进度历史"]].map(([id,label])=><button key={id} className="text-xs text-muted hover:text-accent" onClick={()=>document.getElementById(id)?.scrollIntoView({block:"start"})}>{label}</button>)}</div>
-      <div className="p-6 space-y-6">{panelNotice&&<p role="status" className="rounded-lg bg-paper p-3 text-xs whitespace-pre-wrap">{panelNotice}<button className="ml-2 underline text-accent" type="button" disabled={busy} onClick={()=>void readLatest()}>读取最新记录并保留草稿</button></p>}
+    {selectedId&&<div className="oc-modal-backdrop fixed inset-0 z-40 flex justify-end" onMouseDown={e=>{if(e.target===e.currentTarget)open(null);}}><section role="dialog" aria-modal="true" aria-label="申请详情" className="oc-drawer w-full max-w-[760px] h-full flex flex-col bg-panel border-l border-line">
+      <div className="oc-drawer-head shrink-0 border-b border-line bg-panel">
+        <div className="px-6 pt-4 pb-3 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            {onBack&&<button type="button" className="oc-drawer-back" onClick={()=>{if((dirty||roundDirty)&&!window.confirm("有未保存内容，已暂存在本机浏览器。仍要离开吗？"))return;onBack();}}><Icon name="arrowLeft" size={13}/>{backLabel||"返回"}</button>}
+            <h2 className="font-semibold text-lg leading-snug">{detail?.title||"申请详情"}</h2>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mt-1.5">
+              <span className="text-xs text-muted">{detail?.company} · {detail?.location||"地点未记录"}</span>
+              {detail&&<><Tag tone={STATUS_TONE[detail.status]||"gray"}>{APPLICATION_STATUS[detail.status]||detail.status}</Tag>{detail.stage&&<Tag tone={STAGE_TONE[detail.stage]||"gray"}>{STAGES[detail.stage]||detail.stage}</Tag>}{detail.archived&&<Tag tone="gray">已归档</Tag>}</>}
+            </div>
+          </div>
+          <button className="oc-btn oc-btn-ghost oc-btn-sm oc-btn-icon shrink-0" aria-label="关闭详情" title="关闭" disabled={busy} onClick={()=>open(null)}><Icon name="x" size={16}/></button>
+        </div>
+        <div className="oc-drawer-tabs px-6 flex gap-6" role="group" aria-label="详情分区">{DRAWER_SECTIONS.map(([id,label])=><button key={id} type="button" aria-current={activeSection===id?"true":undefined} onClick={()=>jumpTo(id)}>{label}</button>)}</div>
+      </div>
+      <div ref={drawerBody} className="flex-1 min-h-0 overflow-y-auto overscroll-contain" onScroll={spySections}>
+      <div className="p-6 space-y-6">{panelNotice&&<p role="status" className={"oc-alert text-xs whitespace-pre-wrap block "+(/最新记录|已更新/.test(panelNotice)?"is-warn":"is-info text-ink")}>{panelNotice}{/最新记录|已更新/.test(panelNotice)&&<button className="ml-2 underline underline-offset-2 font-medium" type="button" disabled={busy} onClick={()=>void readLatest()}>读取最新记录并保留草稿</button>}</p>}
       {draft?<><form id="application-fields" onSubmit={e=>void saveApplication(e)} className="space-y-4" aria-label="申请信息">
+        <section aria-labelledby="application-job-info" className="rounded-[14px] border border-line bg-paper/60 p-4 space-y-3">
+          <h3 id="application-job-info" className="text-sm font-semibold">{draft.job_id ? "官网岗位信息" : "岗位信息"}</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-3">
+            {field("company","公司名称")}{field("title","岗位名称")}
+            {field("location","工作地点")}{field("recruitment_type","招聘类型","text",RECRUITMENT)}
+            {field("department","部门")}{field("business_line","业务线")}
+          </div>
+          {field("source_url","原始链接","url")}
+          {!draft.job_id && draft.source_url && /^https?:\/\//i.test(draft.source_url) &&
+            <a className="inline-block text-sm text-accent underline underline-offset-2" href={draft.source_url} target="_blank" rel="noopener noreferrer">打开原始岗位链接</a>}
+          <details className="border-t border-line pt-3">
+            <summary className="cursor-pointer text-xs font-medium text-ink">职位描述</summary>
+            <div className="mt-2 whitespace-pre-wrap text-[13px] leading-6 max-h-72 overflow-auto">{draft.jd || "暂无职位描述"}</div>
+          </details>
+        </section>
+        <h3 className="oc-section-title pt-1">我的申请</h3>
         {draft.applied_date_source==="legacy_tracking"&&<p className="text-xs text-muted">{/* 产品说明移至代码：投递日期沿用旧系统记录，可能是当时更新进度的时间；请按实际情况核对。 */}旧投递日期，请按实际核对。</p>}
-        <div className="grid grid-cols-2 gap-3">{field("company","公司名称")}{field("title","岗位名称")}{field("location","工作地点")}{field("status","申请状态","text",APPLICATION_STATUS)}{field("stage","当前阶段","text",STAGES)}{field("priority","优先级","text",PRIORITY)}{field("recruitment_type","招聘类型","text",RECRUITMENT)}{field("batch","招聘批次")}{field("applied_on","投递日期","date")}{field("channel","来源渠道")}{field("department","部门")}{field("business_line","业务线")}</div>
-        {field("source_url","原始链接","url")}
-        {draft.source_url&&/^https?:\/\//i.test(draft.source_url)&&<a className="inline-flex items-center rounded-lg border border-accent/30 px-4 py-2.5 text-sm font-medium text-accent hover:bg-paper" href={draft.source_url} target="_blank" rel="noreferrer">打开原始岗位链接</a>}
-        <div className="rounded-xl bg-paper p-4 space-y-3"><div className="grid grid-cols-2 gap-3">{field("monthly_salary","月薪酬（元／月）")}<label className={LABEL}>发薪月数<input aria-label="发薪月数" type="number" min={1} max={24} step={1} placeholder="例如 13、14、16" className={INPUT} value={draft.salary_months??""} onChange={e=>change("salary_months",e.target.value?Number(e.target.value):null)}/></label></div>{/* 产品说明移至代码：例如：25000 元／月 × 14 薪，预计年薪酬 350000 元。奖金、股票等另记备注。 */}<p aria-label="预计年薪酬" className="text-sm font-medium">预计年薪酬：{estimatedAnnualSalary(draft.monthly_salary,draft.salary_months)?Number(estimatedAnnualSalary(draft.monthly_salary,draft.salary_months)).toLocaleString("zh-CN")+" 元／年":"填写明确月薪和发薪月数后自动计算"}</p></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {field("status","申请状态","text",APPLICATION_STATUS)}{field("stage","当前阶段","text",STAGES)}
+          {field("priority","优先级","text",PRIORITY)}{field("batch","招聘批次")}
+          {field("applied_on","投递日期","date")}{field("channel","来源渠道")}
+        </div>
+        <div className="rounded-[14px] border border-line bg-paper/60 p-4 space-y-3"><div className="grid grid-cols-2 gap-3">{field("monthly_salary","月薪酬（元／月）")}<label className={LABEL}>发薪月数<input aria-label="发薪月数" type="number" min={1} max={24} step={1} placeholder="例如 13、14、16" className={INPUT} value={draft.salary_months??""} onChange={e=>change("salary_months",e.target.value?Number(e.target.value):null)}/></label></div>{/* 产品说明移至代码：例如：25000 元／月 × 14 薪，预计年薪酬 350000 元。奖金、股票等另记备注。 */}<p aria-label="预计年薪酬" className="text-sm font-medium">预计年薪酬：{estimatedAnnualSalary(draft.monthly_salary,draft.salary_months)?Number(estimatedAnnualSalary(draft.monthly_salary,draft.salary_months)).toLocaleString("zh-CN")+" 元／年":"填写明确月薪和发薪月数后自动计算"}</p></div>
         <label className={LABEL}>标签（逗号分隔）<input className={INPUT} value={String(draft.tags_text??draft.tags.join("，"))} onChange={e=>{change("tags",e.target.value.split(/[,，、]/).filter(Boolean));setDraft(previous=>previous?{...previous,tags_text:e.target.value}:previous);}}/></label>
-        <section aria-label="职位描述" className="space-y-2"><h3 className="text-xs text-muted">职位描述{draft.job_id?"（官网信息）":""}</h3><div className="whitespace-pre-wrap text-[13px] leading-6 max-h-72 overflow-auto rounded-xl bg-paper p-4">{draft.jd||"暂无职位描述"}</div></section>
         <label className={LABEL}>申请备注<textarea aria-label="申请备注" className={INPUT+" min-h-28"} value={draft.notes||""} onChange={e=>change("notes",e.target.value)}/></label>
-        <div className="flex justify-between items-center"><label className="text-xs text-muted flex gap-2"><input type="checkbox" checked={draft.archived} onChange={e=>change("archived",e.target.checked)}/>归档此申请（记录仍保留）</label><button className="rounded-lg bg-accent text-white px-4 py-2 text-sm" disabled={busy}>保存申请信息</button></div>
+        <label className="flex items-center gap-2 text-xs text-muted"><input type="checkbox" checked={draft.archived} onChange={e=>change("archived",e.target.checked)}/>归档此申请（记录仍保留）</label>
       </form>
-      <section id="application-interviews" className="border-t border-line pt-5 space-y-3 scroll-mt-36"><div className="flex justify-between items-center"><h3 className="font-semibold text-sm">真实面试与面经</h3><button className={BUTTON} onClick={()=>beginRound()}>新增面试</button></div>{/* 产品说明移至代码：每轮分别记录时间、结果和复盘；一面完成不代表通过。模拟面试不会自动写成真实招聘进展。 */}
-      {(detail?.interviews||[]).map(interview=><article key={interview.id} className="rounded-xl bg-paper p-4"><div className="flex justify-between items-start"><div><h4 className="font-medium text-sm">{interview.round_name}</h4><p className="text-xs text-muted mt-1">{chinaDate(interview.scheduled_at,true)||"时间未记录"} · {ROUND_RESULT[interview.result]}</p></div><div className="flex gap-4"><button className="text-sm text-accent" aria-label={`编辑${interview.round_name}`} onClick={()=>beginRound(interview)}>编辑</button><button className="text-sm text-danger" aria-label={`删除${interview.round_name}`} disabled={busy} onClick={()=>void deleteRound(interview)}>删除</button></div></div><p className="mt-3 text-[13px] leading-6 whitespace-pre-wrap">{interviewNotes(interview)||"尚未填写面经"}</p></article>)}
+      <section id="application-interviews" className="border-t border-line pt-5 space-y-3 scroll-mt-36"><div className="flex justify-between items-center"><h3 className="oc-section-title !mb-0">真实面试与面经</h3><button className={BUTTON} onClick={()=>beginRound()}><Icon name="plus" size={13}/>新增面试</button></div>{/* 产品说明移至代码：每轮分别记录时间、结果和复盘；一面完成不代表通过。模拟面试不会自动写成真实招聘进展。 */}
+      {(detail?.interviews||[]).map(interview=><article key={interview.id} className="rounded-[14px] border border-line bg-paper/50 p-4"><div className="flex justify-between items-start"><div><h4 className="font-medium text-sm">{interview.round_name}</h4><p className="flex items-center gap-2 text-xs text-muted mt-1.5"><span>{chinaDate(interview.scheduled_at,true)||"时间未记录"}</span><Tag tone={ROUND_RESULT_TONE[interview.result]||"gray"}>{ROUND_RESULT[interview.result]||interview.result}</Tag></p></div><div className="flex gap-1"><button className="oc-btn oc-btn-ghost oc-btn-sm" aria-label={`编辑${interview.round_name}`} onClick={()=>beginRound(interview)}><Icon name="pencil" size={13}/>编辑</button><button className="oc-btn oc-btn-ghost oc-btn-sm !text-danger" aria-label={`删除${interview.round_name}`} disabled={busy} onClick={()=>void deleteRound(interview)}><Icon name="trash" size={13}/>删除</button></div></div><p className="mt-3 text-[13px] leading-6 whitespace-pre-wrap">{interviewNotes(interview)||"尚未填写面经"}</p></article>)}
       {!detail?.interviews?.length&&!round&&<p className="text-xs text-muted py-3">尚未记录真实面试，点击新增面试开始记录。</p>}
-      {round&&<form aria-label="真实面试记录" className="rounded-xl border border-line p-4 space-y-3" onSubmit={e=>void saveRound(e)}>
-        <div className="grid grid-cols-2 gap-3"><label className={LABEL}>面试轮次<select aria-label="面试轮次" className={INPUT} value={String(round.round_name)} onChange={e=>{setRound(previous=>({...previous,round_name:e.target.value}));setRoundDirty(true);}}>{!!round.round_name&&!Object.prototype.hasOwnProperty.call(ROUNDS,String(round.round_name))&&<option value={String(round.round_name)}>{String(round.round_name)}（原记录）</option>}<Options values={ROUNDS}/></select></label>
-        {([['kind','面试类型',ROUND_KIND],['result','本轮结果',ROUND_RESULT]] as const).map(([key,label,values])=><label className={LABEL} key={key}>{label}<select aria-label={label} className={INPUT} value={String(round[key])} onChange={e=>{setRound(previous=>({...previous,[key]:e.target.value}));setRoundDirty(true);}}><Options values={values}/></select></label>)}<InterviewDateInput key={String(round.id||"new")} value={round.scheduled_at} onChange={value=>{setRound(previous=>({...previous,scheduled_at:value}));setRoundDirty(true);}}/></div>
+      {round&&<form aria-label="真实面试记录" className="rounded-[14px] border border-accentLine bg-panel p-4 space-y-3 shadow-soft" onSubmit={e=>void saveRound(e)}>
+        <div className="grid grid-cols-2 gap-3"><div className={LABEL}><span>面试轮次</span><OcSelect ariaLabel="面试轮次" value={String(round.round_name)} options={selectOptions(ROUNDS,String(round.round_name||""))} onChange={value=>{setRound(previous=>({...previous,round_name:value}));setRoundDirty(true);}}/></div>
+        {([['kind','面试类型',ROUND_KIND,undefined],['result','本轮结果',ROUND_RESULT,ROUND_RESULT_TONE]] as const).map(([key,label,values,tones])=><div className={LABEL} key={key}><span>{label}</span><OcSelect ariaLabel={label} value={String(round[key])} options={selectOptions(values,String(round[key]||""),tones)} onChange={value=>{setRound(previous=>({...previous,[key]:value}));setRoundDirty(true);}}/></div>)}<InterviewDateInput key={String(round.id||"new")} value={round.scheduled_at} onChange={value=>{setRound(previous=>({...previous,scheduled_at:value}));setRoundDirty(true);}}/></div>
         <label className={LABEL}>面经<textarea aria-label="面经" className={INPUT+" min-h-44"} placeholder="自由记录本轮问题、回答和心得…" value={String(round.experience_notes||"")} onChange={e=>{setRound(previous=>({...previous,experience_notes:e.target.value}));setRoundDirty(true);}}/></label>
-        <div className="flex gap-2 justify-end"><button className={BUTTON} type="button" onClick={cancelRound}>取消</button><button className="rounded-lg bg-accent text-white px-4 py-2 text-sm" disabled={busy}>保存</button></div>
+        <div className="flex gap-2 justify-end"><button className="oc-btn" type="button" onClick={cancelRound}>取消</button><button className={PRIMARY} disabled={busy}>保存</button></div>
       </form>}
 
       </section>
-      <details id="application-history" className="border-t border-line pt-4 text-xs scroll-mt-36"><summary className="text-muted cursor-pointer">查看进度历史</summary><ol className="mt-3 space-y-2">{detail?.history?.map(event=><li key={event.id}>{chinaDate(event.occurred_at)} · {event.summary}</li>)}</ol></details>
-      </>:<p className="text-sm text-muted">正在读取申请详情…</p>}</div>
+      <details id="application-history" className="border-t border-line pt-4 text-xs"><summary className="text-muted cursor-pointer hover:text-ink">查看进度历史</summary><div role="list" className="radar-timeline mt-3">{detail?.history?.map(event=><div key={event.id} role="listitem"><span className="text-muted tabular-nums">{chinaDate(event.occurred_at)}</span> · {event.summary}</div>)}</div></details>
+      </>:<p role="status" className="text-sm text-muted">正在读取申请详情…</p>}</div>
+    </div>
+      {draft&&<div className="oc-drawer-foot shrink-0">
+        <span className="oc-drawer-state" data-state={busy?"busy":dirty?"dirty":savedAt?"saved":"clean"}>{busy?"正在保存…":dirty?"有未保存的修改 · 已暂存在本机":savedAt?"已保存":"所有修改已保存"}</span>
+        <div className="flex gap-2">
+          <button type="button" className="oc-btn" disabled={busy} onClick={cancelDrawer}>取消</button>
+          <button type="submit" form="application-fields" className={PRIMARY} disabled={busy||!dirty}>保存申请信息</button>
+        </div>
+      </div>}
     </section></div>}
   </main>;
 }
 
 function GroupRows({name,group,records,columns,selected,setSelected,open,save}:{name:string;group:string;records:Application[];columns:[string,string][];selected:Set<string>;setSelected:React.Dispatch<React.SetStateAction<Set<string>>>;open:(id:string)=>void;save:(record:Application,patch:Record<string,unknown>)=>Promise<void>}) {
-  return <>{group&&<tr><td colSpan={columns.length+1} className="bg-paper px-4 py-2 font-medium">{APPLICATION_STATUS[name]||PRIORITY[name]||name} · 本页{records.length}条</td></tr>}{records.map(record=><tr key={record.id} className="border-b border-line hover:bg-paper/50"><td className="application-frozen px-3 py-2" style={{left:0}}><input aria-label={`勾选申请：${record.title}`} type="checkbox" checked={selected.has(record.id)} onChange={e=>setSelected(previous=>{const next=new Set(previous);if(e.target.checked)next.add(record.id);else next.delete(record.id);return next;})}/></td>{columns.map(([key])=><td key={key} data-application-column={key} style={{left:frozenOffset(key)}} className={"px-2 py-2 "+(frozenOffset(key)!==undefined?"application-frozen":"")}>{key==="title"?<button className="text-left text-accent font-medium max-w-[260px]" onClick={()=>open(record.id)}>{record.title}</button>:key==="company"?<span className="font-medium px-1.5">{record.company}</span>:<InlineCell record={record} field={key} save={save}/>}</td>)}</tr>)}</>;
+  return <>{group&&<tr><td colSpan={columns.length+2} className="bg-paper px-4 py-2 font-medium">{APPLICATION_STATUS[name]||PRIORITY[name]||name} · 本页{records.length}条</td></tr>}{records.map(record=><tr key={record.id} className="border-b border-line"><td className="application-frozen px-3 py-2" style={{left:0}}><input aria-label={`勾选申请：${record.title}`} type="checkbox" checked={selected.has(record.id)} onChange={e=>setSelected(previous=>{const next=new Set(previous);if(e.target.checked)next.add(record.id);else next.delete(record.id);return next;})}/></td>{columns.map(([key])=><td key={key} data-application-column={key} style={{left:frozenOffset(key)}} className={"px-2 py-2 "+(frozenOffset(key)!==undefined?"application-frozen":"")}>{key==="title"?<button className="text-left text-ink font-medium max-w-[260px] hover:text-accent underline-offset-2 hover:underline" onClick={()=>open(record.id)}>{record.title}</button>:key==="company"?<span className="font-medium px-1.5">{record.company}</span>:<InlineCell record={record} field={key} save={save}/>}</td>)}<td aria-hidden="true"/></tr>)}</>;
 }

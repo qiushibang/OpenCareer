@@ -1,6 +1,7 @@
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { isAlpha } from "../api";
+import { Tag, type TagTone } from "./OcSelect";
 import { Icon } from "./Icon";
 
 // §34 (UX-016): the agent ends a deliverable turn with plain markdown —
@@ -50,6 +51,12 @@ function ArtifactChip({ path, title }: { path: string; title: string }) {
 // Assistant messages rendered as GitHub-flavored markdown (headings, lists, tables, code,
 // links). Links open externally — never navigate the app shell — except artifact: links,
 // which open the session's artifact viewer.
+const TYPE_CELL_TONES: Record<string, TagTone> = {
+  实习: "purple", 日常实习: "purple", 暑期实习: "purple",
+  校招: "blue", 校园招聘: "blue",
+  社招: "orange", 社会招聘: "orange",
+};
+
 export function Markdown({ text }: { text: string }) {
   return (
     <div className="md">
@@ -59,6 +66,18 @@ export function Markdown({ text }: { text: string }) {
         // http/https/mailto policy).
         urlTransform={(url) => (url.startsWith("artifact:") ? url : defaultUrlTransform(url))}
         components={{
+          // Tables scroll inside a rounded frame at full column width instead of shrinking.
+          table: ({ node: _node, ...props }) => (
+            <div className="md-table-wrap">
+              <table {...props} />
+            </div>
+          ),
+          // Recruitment types keep their fixed colours inside AI answers too.
+          td: ({ node: _node, children, ...props }) => {
+            const text = typeof children === "string" ? children.trim() : Array.isArray(children) && children.length === 1 && typeof children[0] === "string" ? children[0].trim() : "";
+            const tone = TYPE_CELL_TONES[text];
+            return <td {...props}>{tone ? <Tag tone={tone}>{text}</Tag> : children}</td>;
+          },
           img: ({ node: _node, ...props }) =>
             isAlpha() ? (
               <span title="为保护隐私，云端对话不自动加载图片。">图片未自动加载</span>

@@ -10,7 +10,6 @@ from datetime import date, datetime
 import json
 import os
 import re
-import sys
 
 PUBLIC_ONLY = "j.visibility_user_id IS NULL AND j.crawl_source_id IS NOT NULL AND js.source_type = 'crawler'"
 SOURCE_QUERY = f"""

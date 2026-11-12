@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { JobSubscriptionsPanel } from "./JobSubscriptionsPanel";
 const request = vi.fn(async (path: string) => path.endsWith("channels") ? [{id: "channel",name: "测试群",kind: "wecom"}] : path === "job-subscriptions" ? [{id: "sub",title: "北京产品",condition: {all: []},channel_ids: ["channel"],send_time: "09:00",version: 1,enabled: false}] : {});
 vi.mock("../api", () => ({ careerCatalogRequest: (...args: [string]) => request(...args) }));
+afterEach(cleanup);
 describe("job subscriptions", () => {
   it("shows destination and time before explicit activation", async () => {
     render(<JobSubscriptionsPanel condition={{all: []}} onClose={() => {}} />);
@@ -19,6 +20,9 @@ it("shows a policy diagnosis without sending when the user checks the connection
  request.mockClear();
  request.mockImplementation(async(path:string)=>path.endsWith("/check")?{status:"failed",diagnostic:{message:"飞书访问控制策略拒绝了当前应用",platform_code:21001}}:path.endsWith("channels")?[{id:"scan-channel",name:"扫码账号",kind:"feishu_app"}]:[]);
  render(<JobSubscriptionsPanel condition={{all:[]}} onClose={()=>{}}/>);
+ const channels = await screen.findByText("推送渠道 · 已连接 1 个");
+ expect(channels.closest("details")?.open).toBe(false);
+ fireEvent.click(channels);
  fireEvent.click(await screen.findByRole("button",{name:"检查连接（不发消息）"}));
  expect(await screen.findByText(/飞书访问控制策略拒绝了当前应用.*21001/)).toBeTruthy();
  expect(request).toHaveBeenCalledWith("job-subscriptions/channels/scan-channel/check",{});
@@ -52,4 +56,17 @@ it("loads an existing tool draft's saved filters and updates the same subscripti
  await waitFor(()=>expect((screen.getByLabelText("订阅名称") as HTMLInputElement).value).toBe("已保存条件"));
  fireEvent.click(screen.getByRole("button",{name:"保存订阅草稿"}));
  await waitFor(()=>expect(request).toHaveBeenCalledWith("job-subscriptions",expect.objectContaining({subscription_id:"existing",condition,today:true,send_time:"08:30"})));
+});
+
+it("keeps edited task details when adjusting filters in chat and closes with Escape", async () => {
+  request.mockImplementation(async () => []);
+  const close = vi.fn(), configure = vi.fn();
+  render(<JobSubscriptionsPanel condition={{all:[]}} initialDraft={{title:"旧名称",send_time:"09:00"}} onConfigureInChat={configure} onClose={close}/>);
+  fireEvent.change(screen.getByLabelText("订阅名称"), {target:{value:"产品岗位日报"}});
+  fireEvent.change(screen.getByLabelText("每日发送时间（北京时间）"), {target:{value:"08:30"}});
+  fireEvent.click(screen.getByRole("button",{name:"在对话中调整条件"}));
+  expect(configure).toHaveBeenCalledWith(expect.objectContaining({title:"产品岗位日报",send_time:"08:30"}));
+  fireEvent.keyDown(screen.getByRole("button",{name:"关闭"}),{key:"Escape"});
+  expect(close).toHaveBeenCalledOnce();
+  await waitFor(() => expect(request).toHaveBeenCalledWith("job-subscriptions"));
 });

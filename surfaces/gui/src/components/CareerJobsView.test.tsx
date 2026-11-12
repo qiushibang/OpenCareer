@@ -9,6 +9,12 @@ import {
 
 import { CareerJobsView } from "./CareerJobsView";
 
+// Filters use the custom listbox select: open the combobox, then pick an option.
+function choose(name: string | RegExp, option: string | RegExp) {
+  fireEvent.click(screen.getByRole("combobox", { name }));
+  fireEvent.click(screen.getByRole("option", { name: option }));
+}
+
 const api = vi.hoisted(() => ({
   isLocal: () => false,
   getCareerJobs: vi.fn(),
@@ -213,11 +219,11 @@ describe("CareerJobsView", () => {
       await screen.findByRole("dialog", { name: "模拟面试设置" }),
     ).toBeTruthy();
     expect(screen.getByText("AI 平台研发工程师")).toBeTruthy();
+    fireEvent.click(screen.getByRole("combobox", { name: "面试时长" }));
     expect(
-      Array.from(
-        (screen.getByLabelText("面试时长") as HTMLSelectElement).options,
-      ).map((option) => option.textContent),
+      screen.getAllByRole("option").map((option) => option.textContent),
     ).toEqual(["10 分钟 · 5 题", "15 分钟 · 5 题", "20 分钟 · 5 题"]);
+    fireEvent.keyDown(screen.getByRole("listbox", { name: "面试时长" }), { key: "Escape" });
     expect(api.getCareerJob).not.toHaveBeenCalledWith("job-2");
   });
 
@@ -341,9 +347,7 @@ describe("CareerJobsView", () => {
       ),
     );
 
-    fireEvent.change(screen.getByLabelText("公司"), {
-      target: { value: "xiaomi" },
-    });
+    choose("公司", /^小米/);
     await waitFor(() =>
       expect(api.getCareerJobs).toHaveBeenLastCalledWith(
         expect.objectContaining({ companySlug: "xiaomi", offset: 0 }),
@@ -402,12 +406,7 @@ describe("CareerJobsView", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "收藏箱（1）" }),
     );
-    fireEvent.change(
-      screen.getByRole("combobox", { name: /^申请进度$/ }),
-      {
-        target: { value: "interviewing" },
-      },
-    );
+    choose(/^申请进度$/, "面试中");
 
     await waitFor(() =>
       expect(api.getCareerJobs).toHaveBeenLastCalledWith(
@@ -447,9 +446,10 @@ describe("CareerJobsView", () => {
     render(<CareerJobsView />);
     await screen.findByRole("heading", { name: "JD" });
 
+    // Two compact filter columns on phones; the search box spans the full row.
     expect(
       screen.getByTestId("job-filter-grid").className,
-    ).toContain("grid-cols-1");
+    ).toContain("grid-cols-2");
     expect(
       screen.getByTestId("job-radar-layout").className,
     ).toContain("grid-cols-1");
@@ -511,9 +511,7 @@ describe("CareerJobsView", () => {
     render(<CareerJobsView />);
     await screen.findByRole("heading", { name: "JD" });
 
-    fireEvent.change(screen.getByLabelText("我的申请进度"), {
-      target: { value: "applied" },
-    });
+    choose("我的申请进度", "已投递");
     fireEvent.change(screen.getByLabelText("申请备注"), {
       target: { value: "已完成官网投递" },
     });
@@ -580,12 +578,8 @@ describe("CareerJobsView", () => {
       expect(api.getCareerJob).toHaveBeenCalledTimes(2),
     );
     expect(
-      (
-        screen.getByLabelText(
-          "我的申请进度",
-        ) as HTMLSelectElement
-      ).value,
-    ).toBe("interviewing");
+      screen.getByRole("combobox", { name: "我的申请进度" }).textContent,
+    ).toBe("面试中");
   });
 
   it("refreshes the operated job after a favorite version conflict", async () => {

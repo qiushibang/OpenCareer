@@ -17,13 +17,16 @@ import {
   type CareerJobTracking,
 } from "../api";
 import {
-  careerJobTypeClass,
   careerJobTypeLabel,
+  careerJobTypeTone,
 } from "../careerJobLabels";
 import type { ResumeCoachLaunchPayload } from "../careerResumeCoach";
 import { CareerResumeCoachLauncher } from "./CareerResumeCoachLauncher";
+import { Icon } from "./Icon";
+import { OcSelect, Tag } from "./OcSelect";
+import { STATUS_TONE } from "../applications";
 import { LocalJobSyncBanner } from "./LocalJobSyncBanner";
-import { CatalogQueryForm, describeCondition } from "./CatalogQueryForm";
+import { CatalogQueryForm, ConditionChips } from "./CatalogQueryForm";
 import { JobSubscriptionsPanel } from "./JobSubscriptionsPanel";
 
 const PAGE_SIZE = 20;
@@ -88,13 +91,6 @@ const formatDateTime = (value: string) =>
     hourCycle: "h23",
     timeZone: "Asia/Shanghai",
   }).format(new Date(value));
-
-const jobScopeClass = (active: boolean) =>
-  "min-w-[112px] rounded-md px-3 py-1.5 text-[12.5px] font-medium " +
-  "transition-colors " +
-  (active
-    ? "bg-accent text-white"
-    : "text-muted hover:bg-panel hover:text-ink");
 
 export function CareerJobsView({
   onStartResumeCoach,
@@ -226,7 +222,7 @@ export function CareerJobsView({
         if (!current) return;
         const message = failure instanceof Error ? failure.message : "无法连接本地岗位服务。";
         const delay = Number(failure?.retryAfterMs);
-        // Retry only an explicit rate-limit response, respect Retry-After, and
+        // Retry only responses that supply a retry delay, respect Retry-After, and
         // stop after two attempts. Query changes/unmount cancel stale retries.
         if (Number.isFinite(delay) && delay > 0 && rateLimitRetries.current < 2) {
           const wait = Math.min(60000, Math.max(1000, delay));
@@ -461,146 +457,139 @@ export function CareerJobsView({
     setInterviewJob(null);
   };
 
+  const [notice, setNotice] = useState<{ text: string; applicationId?: string } | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 6000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  const openOrAddApplication = async (job: CareerJobDetail, tracked: boolean) => {
+    if (!onOpenApplication) return;
+    if (draftNote !== (job.tracking.note || "") || draftStatus !== job.tracking.application_status) {
+      setTrackingError("请先保存下面的原进度草稿，再打开求职进度。");
+      return;
+    }
+    setTrackingPending(true);
+    setTrackingError("");
+    try {
+      const application = await applicationsRequest<Application>("", { job_id: job.id });
+      if (tracked) { onOpenApplication(application.id); return; }
+      const fresh = await getCareerJob(job.id).catch(() => null);
+      if (fresh?.ok && fresh.job) applyTracking(job.id, fresh.job.tracking);
+      setNotice({ text: `已将「${job.title || "未命名岗位"}」加入求职进度`, applicationId: application.id });
+    } catch (e) {
+      setTrackingError((e as Error).message);
+    } finally {
+      setTrackingPending(false);
+    }
+  };
+  // Skeleton while a different job is loading, or before the first page has picked one.
+  const detailSkeleton = (detailLoading && detail?.id !== selectedId) || (!detail && loading && !jobs.length);
   const rangeStart = total ? offset + 1 : 0;
   const rangeEnd = Math.min(offset + PAGE_SIZE, total);
 
   return (
     <main className="oc-page oc-jobs flex-1 min-w-0 bg-paper overflow-hidden flex flex-col">
-      <header className="shrink-0 bg-panel border-b border-line px-3 py-3 sm:px-6 sm:py-4">
-        <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
-          <div>
-            <h1 className="text-xl font-semibold">发现岗位</h1>
+      <header className="shrink-0 bg-panel border-b border-line">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 mb-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1>发现岗位</h1>
+              {loading && !jobs.length ? <span className="oc-skeleton h-[22px] w-[72px] rounded-full" aria-hidden="true" /> : <span className="oc-chip tabular-nums">{total.toLocaleString()} 个岗位</span>}
+            </div>
             {/* 产品说明移至代码：浏览已入库的官方招聘岗位，选择岗位后在右侧查看完整 JD。 */}
           </div>
-          <div className="text-[12px] text-muted">{total.toLocaleString()} 个岗位</div>
+          <div className="radar-toolbar flex flex-wrap items-center">
+            <LocalJobSyncBanner onUpdated={refreshCatalog} showStatus={false} />
+            {standalone && <>
+              <button type="button" className={"oc-btn oc-btn-sm " + (showAdvanced || advanced ? "oc-btn-accent" : "")} aria-expanded={showAdvanced} onClick={() => setShowAdvanced(v => !v)}><Icon name="filter" size={14}/>组合筛选</button>
+              <button type="button" className="oc-btn oc-btn-sm" onClick={() => {setSubscriptionDraft(undefined);setShowSubscriptions(true);}}><Icon name="bell" size={14}/>岗位订阅</button>
+            </>}
+          </div>
         </div>
-        <div className="radar-toolbar flex flex-wrap gap-3 items-center mb-3">
-          <LocalJobSyncBanner onUpdated={refreshCatalog} showStatus={false} />
-          {standalone && <><button className="text-sm text-accent border border-line rounded-lg px-3 py-2" onClick={() => setShowAdvanced(v => !v)}>组合筛选</button>
-          <button className="text-sm text-accent border border-line rounded-lg px-3 py-2" onClick={() => {setSubscriptionDraft(undefined);setShowSubscriptions(true);}}>岗位订阅</button>
-          {advanced && <><p className="text-xs text-muted flex-1">{describeCondition(advanced.condition || {all: []})}{advanced.today ? "；今天新增" : ""}</p><button className="text-xs text-accent" onClick={() => {setAdvanced(null);setAdvancedResult(null);setOffset(0);}}>清除组合条件</button></>}
-        </>}
-        </div>
-        {showAdvanced && <CatalogQueryForm onSubmit={criteria => {setAdvanced(criteria);setOffset(0);setShowAdvanced(false);}} />}
-        {advancedResult?.semantic.partial && <p role="status" className="text-sm text-warnInk mb-2">仅评估了 {advancedResult.semantic.evaluated} 个候选，当前数量不是全库总数。{advancedResult.semantic.next_offset !== null && <button className="text-accent ml-2" onClick={() => {setAdvanced(p => ({...p,semantic_offset:advancedResult.semantic.next_offset!}));setOffset(0);}}>评估下一批候选</button>}</p>}
-        {advanced && advancedResult?.warnings.map(w => <p key={w} className="text-xs text-warnInk mb-1">{w}</p>)}
+        {standalone && advanced && <div className="oc-alert is-info mb-3 items-center"><Icon name="filter" size={14} className="shrink-0 text-accent"/><div className="flex-1 min-w-0"><ConditionChips inline condition={advanced.condition || {all: []}} today={advanced.today} semanticQuery={advanced.semantic_query} /></div><button type="button" className="oc-btn oc-btn-ghost oc-btn-sm" onClick={() => {setAdvanced(null);setAdvancedResult(null);setOffset(0);}}>清除组合条件</button></div>}
+        {showAdvanced && <div className="mb-3"><CatalogQueryForm onSubmit={criteria => {setAdvanced(criteria);setOffset(0);setShowAdvanced(false);}} /></div>}
+        {advancedResult?.semantic.partial && <p role="status" className="oc-alert is-warn mb-3">仅评估了 {advancedResult.semantic.evaluated} 个候选，当前数量不是全库总数。{advancedResult.semantic.next_offset !== null && <button className="text-accent ml-2 font-medium" onClick={() => {setAdvanced(p => ({...p,semantic_offset:advancedResult.semantic.next_offset!}));setOffset(0);}}>评估下一批候选</button>}</p>}
+        {/* The catalog keeps full diagnostics for tools. In Radar, surface coverage only when it affects a date filter or an empty result. */}
+        {advanced && advancedResult && (advanced.today || /"new_at"/.test(JSON.stringify(advanced.condition)) || advancedResult.total === 0) &&
+          advancedResult.warnings.some(w => /监测初始基线|公共目录有|尚未完成本轮同步/.test(w) &&
+            (!w.startsWith("监测初始基线") || advanced.today || /"new_at"/.test(JSON.stringify(advanced.condition)))) &&
+          <p className="text-xs text-warnInk mb-2">岗位监测记录可能不完整，请以官网为准。</p>}
         <fieldset className={advanced ? "hidden" : "contents"} disabled={!!advanced}>
-        <div
-          aria-label="岗位范围"
-          className="mb-3 inline-flex w-fit rounded-lg border border-line bg-paper p-1"
-          role="group"
-        >
-          <button
-            aria-pressed={!favoriteOnly}
-            className={jobScopeClass(!favoriteOnly)}
-            onClick={() =>
-              resetOffset(() => setFavoriteOnly(false))
-            }
-            type="button"
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <div
+            aria-label="岗位范围"
+            className="oc-seg"
+            role="group"
           >
-            全部岗位
-          </button>
-          <button
-            aria-pressed={favoriteOnly}
-            className={jobScopeClass(favoriteOnly)}
-            onClick={() =>
-              resetOffset(() => setFavoriteOnly(true))
-            }
-            type="button"
-          >
-            收藏箱（{filters?.favorite_count || 0}）
-          </button>
+            <button
+              aria-pressed={!favoriteOnly}
+              onClick={() =>
+                resetOffset(() => setFavoriteOnly(false))
+              }
+              type="button"
+            >
+              全部岗位
+            </button>
+            <button
+              aria-pressed={favoriteOnly}
+              onClick={() =>
+                resetOffset(() => setFavoriteOnly(true))
+              }
+              type="button"
+            >
+              收藏箱（{filters?.favorite_count || 0}）
+            </button>
+          </div>
+          {trackingError && (
+            <span className="text-[12px] text-danger">
+              {trackingError}
+            </span>
+          )}
         </div>
         <div
-          className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1.6fr)_repeat(3,minmax(120px,1fr))]"
+          className="radar-filters grid grid-cols-2 gap-2 lg:grid-cols-4 xl:grid-cols-[minmax(240px,1.8fr)_repeat(4,minmax(112px,1fr))]"
           data-testid="job-filter-grid"
         >
-          <form onSubmit={submitSearch} className="flex gap-1.5">
+          <form onSubmit={submitSearch} className="oc-search col-span-2 lg:col-span-4 xl:col-span-1">
+            <Icon name="search" size={15} />
             <input
               aria-label="搜索岗位"
-              className="min-w-0 flex-1 rounded-lg border border-line bg-paper px-3 py-2 text-[12.5px]"
+              className="oc-field pr-16"
               placeholder="搜索职位、技能或 JD"
               value={queryInput}
               onChange={(event) => setQueryInput(event.target.value)}
             />
-            <button className="rounded-lg bg-accent text-white px-3 text-[12px]" type="submit">
+            <button className="absolute right-1 oc-btn oc-btn-primary oc-btn-sm" type="submit">
               搜索
             </button>
           </form>
-          <select
-            aria-label="公司"
-            className="rounded-lg border border-line bg-paper px-2.5 py-2 text-[12px]"
+          <OcSelect
+            ariaLabel="公司"
             value={companySlug}
-            onChange={(event) =>
-              resetOffset(() => setCompanySlug(event.target.value))
-            }
-          >
-            <option value="">全部公司</option>
-            {(filters?.companies || []).map((item) => (
-              <option key={item.slug} value={item.slug}>
-                {item.name}（{item.count}）
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="城市"
-            className="rounded-lg border border-line bg-paper px-2.5 py-2 text-[12px]"
+            searchable
+            onChange={(value) => resetOffset(() => setCompanySlug(value))}
+            options={[{ value: "", label: "全部公司" }, ...(filters?.companies || []).map((item) => ({ value: item.slug, label: item.name, count: item.count }))]}
+          />
+          <OcSelect
+            ariaLabel="城市"
             value={location}
-            onChange={(event) =>
-              resetOffset(() => setLocation(event.target.value))
-            }
-          >
-            <option value="">全部城市</option>
-            {(filters?.locations || []).map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.value}（{item.count}）
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="招聘类型"
-            className="rounded-lg border border-line bg-paper px-2.5 py-2 text-[12px]"
+            searchable
+            onChange={(value) => resetOffset(() => setLocation(value))}
+            options={[{ value: "", label: "全部城市" }, ...(filters?.locations || []).map((item) => ({ value: item.value, label: item.value, count: item.count }))]}
+          />
+          <OcSelect
+            ariaLabel="招聘类型"
             value={recruitmentType}
-            onChange={(event) =>
-              resetOffset(() => setRecruitmentType(event.target.value))
-            }
-          >
-            <option value="">全部类型</option>
-            {(filters?.recruitment_types || []).map((item) => (
-              <option key={item.value} value={item.value}>
-                {careerJobTypeLabel(item.value)}（{item.count}）
-              </option>
-            ))}
-          </select>
-
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <select
-            aria-label="申请进度"
-            className="w-full rounded-lg border border-line bg-paper px-2.5 py-2 text-[12px] sm:w-auto"
+            onChange={(value) => resetOffset(() => setRecruitmentType(value))}
+            options={[{ value: "", label: "全部类型" }, ...(filters?.recruitment_types || []).map((item) => ({ value: item.value, label: careerJobTypeLabel(item.value), count: item.count, tone: careerJobTypeTone(item.value) || undefined }))]}
+          />
+          <OcSelect
+            ariaLabel="申请进度"
             value={applicationStatus}
-            onChange={(event) =>
-              resetOffset(() =>
-                setApplicationStatus(
-                  event.target.value as
-                    | CareerApplicationStatus
-                    | "",
-                ),
-              )
-            }
-          >
-            <option value="">全部申请进度</option>
-            {APPLICATION_STATUSES.map((value) => (
-              <option key={value} value={value}>
-                {APPLICATION_STATUS_NAMES[value]}
-              </option>
-            ))}
-          </select>
-          {trackingError && (
-            <span className="text-[12px] text-red-700">
-              {trackingError}
-            </span>
-          )}
+            onChange={(value) => resetOffset(() => setApplicationStatus(value as CareerApplicationStatus | ""))}
+            options={[{ value: "", label: "全部申请进度" }, ...APPLICATION_STATUSES.map((value) => ({ value, label: APPLICATION_STATUS_NAMES[value], tone: STATUS_TONE[value] }))]}
+          />
         </div>
         </fieldset>
       </header>
@@ -615,68 +604,65 @@ export function CareerJobsView({
         className="flex-1 min-h-0 overflow-y-auto grid grid-cols-1 lg:overflow-hidden lg:grid-cols-[minmax(300px,38%)_1fr]"
         data-testid="job-radar-layout"
       >
-        <section className="min-h-[420px] border-r border-line bg-paper flex flex-col lg:min-h-0">
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {loading && (
-              <div className="text-center text-muted py-16">正在加载岗位…</div>
+        <section className="radar-list min-h-[420px] border-r border-line flex flex-col lg:min-h-0">
+          {/* Refreshing an existing page keeps the old cards visible under a thin progress bar;
+              only the very first load shows skeleton cards. */}
+          <div className={"radar-progress" + (loading && jobs.length ? " is-active" : "")} aria-hidden="true" />
+          <div className={"flex-1 overflow-y-auto p-3 space-y-2 transition-opacity " + (loading && jobs.length ? "opacity-60 pointer-events-none" : "")} aria-busy={loading}>
+            {loading && !jobs.length && (
+              <div role="status" aria-label="正在加载岗位…" className="space-y-2">
+                {[0, 1, 2, 3, 4, 5].map((index) => (
+                  <div key={index} className="oc-skeleton-card" aria-hidden="true" style={{ animationDelay: `${index * 60}ms` }}>
+                    <div className="oc-skeleton h-[15px]" style={{ width: `${[62, 48, 70, 55, 66, 44][index]}%` }} />
+                    <div className="oc-skeleton h-3" style={{ width: `${[38, 30, 42, 34, 28, 40][index]}%` }} />
+                    <div className="oc-skeleton h-[20px] w-14 rounded-md" />
+                  </div>
+                ))}
+              </div>
             )}
             {!loading && error && (
-              <div role="alert" className="rounded-lg bg-red-50 text-red-700 p-3 text-sm">
-                {error}<button type="button" className="ml-3 underline" onClick={() => {rateLimitRetries.current=0;setListRevision(value=>value+1);}}>重新加载</button>
+              <div role="alert" className="oc-alert">
+                <span className="flex-1">{error}</span><button type="button" className="shrink-0 font-medium underline underline-offset-2" onClick={() => {rateLimitRetries.current=0;setListRevision(value=>value+1);}}>重新加载</button>
               </div>
             )}
             {!loading && !error && jobs.length === 0 && (
-              <div className="text-center text-muted py-16">
-                没有符合当前条件的岗位
+              <div className="oc-empty">
+                <div className="oc-empty-icon"><Icon name="search" size={20} /></div>
+                <strong>没有符合当前条件的岗位</strong>
+                <p>试试放宽城市、公司或关键词条件。</p>
               </div>
             )}
             {jobs.map((job) => (
-              <div key={job.id} className="relative">
+              <div key={job.id} className="radar-item relative">
                 <button
-                  className={
-                    "w-full text-left rounded-xl border p-3 pb-12 pr-11 transition-colors " +
-                    (selectedId === job.id
-                      ? "border-accent bg-panel"
-                      : "border-line bg-panel hover:border-faint")
-                  }
+                  className="radar-card"
+                  aria-current={selectedId === job.id ? "true" : undefined}
                   onClick={() => setSelectedId(job.id)}
                 >
-                  <div className="font-medium text-[13.5px]">
+                  <div className="radar-card-title">
                     {job.title || "未命名岗位"}
                   </div>
-                  <div className="text-[12px] text-muted mt-1.5">
+                  <div className="radar-card-sub">
                     {job.company.name} ·{" "}
                     {job.locations.join("、") || "地点未标注"}
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-faint mt-2">
-                    <span
-                      className={
-                        "rounded-full border px-2 py-0.5 " +
-                        careerJobTypeClass(job.recruitment_type)
-                      }
-                      data-job-type={
-                        job.recruitment_type || "unknown"
-                      }
-                    >
-                      {careerJobTypeLabel(job.recruitment_type)}
-                    </span>
-                    <span className={"rounded-full px-2 py-0.5 " + (staleConfirmation(job) ? "bg-paper text-muted" : "bg-green-50 text-green-700")}>
-                      {staleConfirmation(job) ? "待核验" : displayStatus(job.status)}
-                    </span>
-                    {job.tracking.application_status !==
-                      "not_started" && (
-                      <span className="rounded-full bg-accentSoft text-accent px-2 py-0.5">
-                        {
-                          APPLICATION_STATUS_NAMES[
-                            job.tracking.application_status
-                          ]
-                        }
-                      </span>
-                    )}
-                    <span>
-                      最近确认 {formatDate(job.last_seen_at)}
-                    </span>
-                  </div>
+                  {/* Verification state and confirmation date live in the detail pane;
+                      the card only carries what helps choose (type, my progress). */}
+                  {(careerJobTypeTone(job.recruitment_type) || job.tracking.application_status !== "not_started" || job.status !== "active") && (
+                    <div className="radar-card-meta">
+                      {careerJobTypeTone(job.recruitment_type) && (
+                        <Tag tone={careerJobTypeTone(job.recruitment_type)!}>
+                          <span data-job-type={job.recruitment_type}>{careerJobTypeLabel(job.recruitment_type)}</span>
+                        </Tag>
+                      )}
+                      {job.status !== "active" && <Tag tone="gray">{displayStatus(job.status)}</Tag>}
+                      {job.tracking.application_status !== "not_started" && (
+                        <Tag tone={STATUS_TONE[job.tracking.application_status] || "gray"}>
+                          {APPLICATION_STATUS_NAMES[job.tracking.application_status]}
+                        </Tag>
+                      )}
+                    </div>
+                  )}
                 </button>
                 <button
                   aria-label={`${
@@ -684,45 +670,47 @@ export function CareerJobsView({
                       ? "取消收藏"
                       : "收藏岗位"
                   }：${job.title || "未命名岗位"}`}
-                  className="absolute right-3 top-3 rounded-md px-2 py-1 text-[16px] text-accent disabled:opacity-40"
+                  aria-pressed={job.tracking.is_favorite}
+                  className="radar-fav disabled:opacity-40"
                   disabled={trackingPending}
                   onClick={(event) => toggleFavorite(event, job)}
                 >
-                  {job.tracking.is_favorite ? "★" : "☆"}
+                  <Icon name={job.tracking.is_favorite ? "starFilled" : "star"} size={17} />
                 </button>
                 {onStartInterview && (
                   <button
                     aria-label={`从岗位列表模拟面试：${
                       job.title || "未命名岗位"
                     }`}
-                    className="absolute bottom-3 right-3 rounded-lg border border-accent px-3 py-1.5 text-[12px] text-accent"
+                    className="radar-card-action oc-btn oc-btn-accent oc-btn-sm"
                     disabled={interviewSetupLoading}
                     onClick={(event) => {
                       event.stopPropagation();
                       void openInterviewSetup(job);
                     }}
                   >
+                    <Icon name="mic" size={13} />
                     模拟面试
                   </button>
                 )}
               </div>
             ))}
           </div>
-          <footer className="border-t border-line px-3 py-2.5 flex items-center justify-between">
-            <span className="text-[11.5px] text-muted">
-              {rangeStart}-{rangeEnd} / {total}
+          <footer className="radar-pager">
+            <span>
+              {loading && !jobs.length ? "正在加载…" : `${rangeStart}-${rangeEnd} / ${total}`}
             </span>
-            <div className="flex gap-2">
+            <div className="flex gap-1.5">
               <button
-                className="px-3 py-1.5 rounded-lg border border-line text-[12px] disabled:opacity-40"
-                disabled={offset === 0}
+                className="oc-btn oc-btn-sm"
+                disabled={offset === 0 || loading}
                 onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
               >
                 上一页
               </button>
               <button
-                className="px-3 py-1.5 rounded-lg border border-line text-[12px] disabled:opacity-40"
-                disabled={offset + PAGE_SIZE >= total}
+                className="oc-btn oc-btn-sm"
+                disabled={offset + PAGE_SIZE >= total || loading}
                 onClick={() => setOffset(offset + PAGE_SIZE)}
               >
                 下一页
@@ -732,44 +720,55 @@ export function CareerJobsView({
         </section>
 
         <section className="min-h-[420px] overflow-y-auto bg-panel lg:min-h-0">
-          {detailLoading && (
-            <div className="text-center text-muted py-20">正在加载岗位详情…</div>
+          {detailSkeleton && (
+            <div role="status" aria-label="正在加载岗位详情…" className="max-w-4xl mx-auto p-4 space-y-5 sm:p-7">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 space-y-2.5"><div className="oc-skeleton h-6 w-3/5" /><div className="oc-skeleton h-3.5 w-1/3" /><div className="flex gap-1.5"><div className="oc-skeleton h-[22px] w-16 rounded-md" /><div className="oc-skeleton h-[22px] w-12 rounded-md" /></div></div>
+                <div className="hidden sm:flex gap-2"><div className="oc-skeleton h-9 w-20 rounded-[10px]" /><div className="oc-skeleton h-9 w-24 rounded-[10px]" /></div>
+              </div>
+              <div className="oc-skeleton h-[68px] w-full rounded-[14px]" />
+              <div className="oc-skeleton h-[72px] w-full rounded-[14px]" />
+              <div className="space-y-2.5 pt-2">{[92, 84, 96, 70, 88, 60, 80].map((width, index) => <div key={index} className="oc-skeleton h-3" style={{ width: `${width}%` }} />)}</div>
+            </div>
           )}
           {!detailLoading && detailError && (
-            <div className="m-5 rounded-lg bg-red-50 text-red-700 p-3 text-sm">
+            <div className="m-5 oc-alert">
               {detailError}
             </div>
           )}
-          {!detailLoading && !detailError && !detail && (
-            <div className="text-center text-muted py-20">请选择一个岗位</div>
+          {!detailLoading && !loading && !detailError && !detail && (
+            <div className="oc-empty h-full">
+              <div className="oc-empty-icon"><Icon name="briefcase" size={20} /></div>
+              <strong>请选择一个岗位</strong>
+              <p>在左侧列表中选择岗位，查看完整 JD、变化记录与申请进度。</p>
+            </div>
           )}
-          {!detailLoading && detail && (
-            <article className="max-w-4xl mx-auto p-4 space-y-6 sm:p-6">
+          {detail && !detailSkeleton && (
+            <article key={detail.id} className="radar-detail-enter max-w-4xl mx-auto p-4 space-y-7 sm:p-7">
               <header
                 className="flex flex-col items-start justify-between gap-4 lg:flex-row lg:gap-5"
                 data-testid="job-detail-header"
               >
-                <div>
-                  <h2 className="text-xl font-semibold">
+                <div className="min-w-0">
+                  <h2>
                     {detail.title || "未命名岗位"}
                   </h2>
-                  <div className="text-[13px] text-muted mt-2">
+                  <div className="text-[13px] text-muted mt-1.5">
                     {detail.company.name} ·{" "}
                     {detail.locations.join("、") || "地点未标注"}
                   </div>
-                  <div className="flex items-center gap-2 mt-3 text-[11px]">
-                    <span
-                      className={
-                        "rounded-full border px-2 py-0.5 " +
-                        careerJobTypeClass(detail.recruitment_type)
-                      }
-                      data-job-type-detail={detail.recruitment_type || "unknown"}
-                    >
-                      {careerJobTypeLabel(detail.recruitment_type)}
+                  <div className="flex flex-wrap items-center gap-1.5 mt-3">
+                    {careerJobTypeTone(detail.recruitment_type) && (
+                      <Tag tone={careerJobTypeTone(detail.recruitment_type)!}>
+                        <span data-job-type-detail={detail.recruitment_type}>{careerJobTypeLabel(detail.recruitment_type)}</span>
+                      </Tag>
+                    )}
+                    <span className={"oc-chip " + (staleConfirmation(detail) ? "is-warn" : detail.status === "active" ? "is-ok" : "")} title={staleConfirmation(detail) ? "超过 48 小时未在官网再次确认，请以官网为准" : undefined}>
+                      <span className="oc-dot" />{staleConfirmation(detail) ? "待核验" : displayStatus(detail.status)}
                     </span>
-                    <span className="rounded-full bg-green-50 text-green-700 px-2 py-0.5">
-                      {staleConfirmation(detail) ? "待核验" : displayStatus(detail.status)}
-                    </span>
+                    {detail.tracking.application_status !== "not_started" && (
+                      <Tag tone={STATUS_TONE[detail.tracking.application_status] || "gray"}>{APPLICATION_STATUS_NAMES[detail.tracking.application_status]}</Tag>
+                    )}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
@@ -778,10 +777,11 @@ export function CareerJobsView({
                       aria-label={`从岗位详情模拟面试：${
                         detail.title || "未命名岗位"
                       }`}
-                      className="rounded-lg bg-accent px-3.5 py-2 text-[12.5px] text-white"
+                      className="oc-btn"
                       disabled={interviewSetupLoading}
                       onClick={() => void openInterviewSetup(detail)}
                     >
+                      <Icon name="mic" size={14} />
                       模拟面试
                     </button>
                   )}
@@ -791,12 +791,14 @@ export function CareerJobsView({
                         ? "取消收藏"
                         : "收藏岗位"
                     }：${detail.title || "未命名岗位"}`}
-                    className="rounded-lg border border-line px-3.5 py-2 text-[12.5px] text-accent disabled:opacity-40"
+                    aria-pressed={detail.tracking.is_favorite}
+                    className={"oc-btn " + (detail.tracking.is_favorite ? "oc-btn-accent" : "")}
                     disabled={trackingPending}
                     onClick={(event) =>
                       toggleFavorite(event, detail)
                     }
                   >
+                    <Icon name={detail.tracking.is_favorite ? "starFilled" : "star"} size={14} />
                     {detail.tracking.is_favorite
                       ? "已收藏"
                       : "收藏"}
@@ -809,36 +811,53 @@ export function CareerJobsView({
                   />
                   {/^https?:\/\//.test(detail.source_url) && (
                     <a
-                      className="rounded-lg bg-accent text-white px-3.5 py-2 text-[12.5px]"
+                      className="oc-btn oc-btn-primary"
                       href={detail.source_url}
                       target="_blank"
                       rel="noreferrer"
                     >
                       查看官网
+                      <Icon name="external" size={14} />
                     </a>
                   )}
                 </div>
               </header>
 
-              <div className="radar-metadata grid grid-cols-1 gap-3 text-[11.5px] text-muted sm:grid-cols-2">
-                <div className="rounded-lg bg-paper p-3">
+              <div className="radar-metadata grid grid-cols-2 gap-3 text-[11.5px] text-muted sm:grid-cols-3">
+                <div>
                   最近确认
-                  <div className="text-ink mt-1">{formatDate(detail.last_seen_at)}</div>
+                  <div className="text-ink text-[13px] font-medium mt-1">{formatDate(detail.last_seen_at)}</div>
                 </div>
-                <div className="rounded-lg bg-paper p-3">
+                <div>
                   最近变化
-                  <div className="text-ink mt-1">{formatDate(detail.last_changed_at)}</div>
+                  <div className="text-ink text-[13px] font-medium mt-1">{formatDate(detail.last_changed_at)}</div>
+                </div>
+                <div className="hidden sm:block">
+                  来源
+                  <div className="text-ink text-[13px] font-medium mt-1 truncate">{detail.company.name} 官网</div>
                 </div>
               </div>
 
-              <section className="rounded-xl bg-paper p-4 space-y-3">
-                {standalone && onOpenApplication && <div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold">求职进度</h3><p className="text-xs text-muted mt-1">{APPLICATION_STATUS_NAMES[detail.tracking.application_status]} · 在工作台管理面试、面经和导出</p></div><button className="rounded-lg bg-accent px-3 py-2 text-xs text-white disabled:opacity-40" disabled={trackingPending} onClick={async()=>{
-                  if(draftNote!==(detail.tracking.note||"")||draftStatus!==detail.tracking.application_status){setTrackingError("请先保存下面的原进度草稿，再打开求职进度。");return;}
-                  setTrackingPending(true);setTrackingError("");
-                  try{const application=await applicationsRequest<Application>("",{job_id:detail.id});onOpenApplication(application.id);}catch(e){setTrackingError((e as Error).message);}finally{setTrackingPending(false);}
-                }}>加入／打开求职进度</button></div>}
+              <section className="rounded-[14px] border border-line bg-[color-mix(in_srgb,var(--paper)_55%,var(--panel))] p-4 space-y-3">
+                {standalone && onOpenApplication && (() => {
+                  // Adding is a quick bookmark: stay on the radar and offer a link. Only an
+                  // already-tracked job navigates, because then the user wants the record.
+                  const tracked = detail.tracking.application_status !== "not_started";
+                  return <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className={"w-9 h-9 shrink-0 grid place-items-center rounded-[10px] " + (tracked ? "bg-okSoft text-ok" : "bg-accentSoft text-accent")}><Icon name={tracked ? "check" : "table"} size={17}/></span>
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-semibold">{tracked ? "已在求职进度中" : "求职进度"}</h3>
+                        <p className="text-xs text-muted mt-0.5">{tracked ? `${APPLICATION_STATUS_NAMES[detail.tracking.application_status]} · 在工作台管理面试、面经和导出` : "加入后可记录投递、面试与面经；加入不代表已投递"}</p>
+                      </div>
+                    </div>
+                    <button className={"oc-btn oc-btn-sm " + (tracked ? "" : "oc-btn-primary")} disabled={trackingPending} onClick={() => void openOrAddApplication(detail, tracked)}>
+                      {tracked ? <>在求职进度中查看<Icon name="arrowRight" size={13}/></> : <><Icon name="plus" size={14}/>加入求职进度</>}
+                    </button>
+                  </div>;
+                })()}
                 <details open={!standalone}>
-                <summary className="text-xs text-muted cursor-pointer mb-3">原申请进度与备注（快速编辑）</summary>
+                <summary className="inline-flex items-center gap-1 text-xs text-muted cursor-pointer mb-3 hover:text-ink"><Icon name="chevronRight" size={12} className="transition-transform" />原申请进度与备注（快速编辑）</summary>
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold">
                     我的申请进度
@@ -851,32 +870,21 @@ export function CareerJobsView({
                       : "尚未记录"}
                   </span>
                 </div>
-                <div className="grid grid-cols-[180px_1fr] gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[180px_1fr]">
                   <label className="space-y-1 text-[12px] text-muted">
                     <span>申请进度</span>
-                    <select
-                      aria-label="我的申请进度"
-                      className="w-full rounded-lg border border-line bg-panel px-2.5 py-2 text-[12.5px] text-ink"
+                    <OcSelect
+                      ariaLabel="我的申请进度"
                       value={draftStatus}
-                      onChange={(event) =>
-                        setDraftStatus(
-                          event.target
-                            .value as CareerApplicationStatus,
-                        )
-                      }
-                    >
-                      {APPLICATION_STATUSES.map((value) => (
-                        <option key={value} value={value}>
-                          {APPLICATION_STATUS_NAMES[value]}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(value) => setDraftStatus(value as CareerApplicationStatus)}
+                      options={APPLICATION_STATUSES.map((value) => ({ value, label: APPLICATION_STATUS_NAMES[value], tone: STATUS_TONE[value] }))}
+                    />
                   </label>
                   <label className="space-y-1 text-[12px] text-muted">
                     <span>申请备注</span>
                     <textarea
                       aria-label="申请备注"
-                      className="w-full min-h-20 resize-y rounded-lg border border-line bg-panel px-3 py-2 text-[12.5px] text-ink"
+                      className="oc-field min-h-20 resize-y"
                       maxLength={2000}
                       value={draftNote}
                       onChange={(event) =>
@@ -890,7 +898,7 @@ export function CareerJobsView({
                     {draftNote.length} / 2000
                   </span>
                   <button
-                    className="rounded-lg bg-accent px-3.5 py-2 text-[12.5px] text-white disabled:opacity-40"
+                    className="oc-btn oc-btn-primary oc-btn-sm"
                     disabled={trackingPending}
                     onClick={saveTracking}
                   >
@@ -906,13 +914,12 @@ export function CareerJobsView({
                   </div>
                 )}
                 <div
-                  className="space-y-2"
+                  className="radar-timeline"
                   data-testid="application-timeline"
                 >
                   {(detail.tracking.events || []).map((event) => (
                     <div
                       key={event.id}
-                      className="rounded-lg border border-line px-3 py-2 text-[12px]"
                     >
                       <span className="font-medium">
                         {
@@ -938,19 +945,19 @@ export function CareerJobsView({
               </section>
 
               <section>
-                <h3 className="text-sm font-semibold mb-2">JD</h3>
-                <div className="rounded-xl bg-paper p-4 whitespace-pre-wrap text-[13px] leading-6">
+                <h3 className="oc-section-title">JD</h3>
+                <div className="radar-jd">
                   {detail.description_raw}
                 </div>
               </section>
 
+              <div className="grid grid-cols-1 gap-7 md:grid-cols-2">
               <section>
-                <h3 className="text-sm font-semibold mb-2">版本记录</h3>
-                <div className="space-y-2">
+                <h3 className="oc-section-title">版本记录</h3>
+                <div className="radar-timeline">
                   {(detail.versions || []).map((version) => (
                     <div
                       key={version.version_number}
-                      className="rounded-lg bg-paper px-3 py-2 text-[12px]"
                     >
                       版本 {version.version_number} ·{" "}
                       {formatDate(version.captured_at)}
@@ -963,12 +970,11 @@ export function CareerJobsView({
               </section>
 
               <section>
-                <h3 className="text-sm font-semibold mb-2">变化记录</h3>
-                <div className="space-y-2">
+                <h3 className="oc-section-title">变化记录</h3>
+                <div className="radar-timeline">
                   {(detail.catalog_events || detail.events || []).filter(event => event.event_type !== "created").map((event, index) => (
                     <div
                       key={`${event.occurred_at}-${index}`}
-                      className="rounded-lg bg-paper px-3 py-2 text-[12px]"
                     >
                       <span className="font-medium">
                         {EVENT_NAMES[event.event_type] || event.event_type}
@@ -983,109 +989,80 @@ export function CareerJobsView({
                   )}
                 </div>
               </section>
+              </div>
             </article>
           )}
         </section>
       </div>
       {interviewJob && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-5">
+        <div className="oc-dialog-backdrop">
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="career-interview-setup-title"
-            className="w-full max-w-lg rounded-xl border border-line bg-panel p-5 shadow-xl"
+            className="oc-dialog max-w-lg"
           >
             <header>
               <h2
                 id="career-interview-setup-title"
-                className="font-semibold"
               >
                 模拟面试设置
               </h2>
-              <p className="mt-1 text-[12px] text-muted">
+              <p>
                 {interviewJob.title || "未命名岗位"} ·{" "}
                 {interviewJob.company.name}
               </p>
             </header>
-            <div className="mt-4 grid gap-3">
-              <label className="text-xs text-muted">
-                面试简历
-                <select
-                  aria-label="面试简历"
-                  className="mt-1 block w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm text-ink"
+            <div className="mt-5 grid gap-4">
+              <div className="oc-field-label">
+                <span>面试简历</span>
+                <OcSelect
+                  ariaLabel="面试简历"
                   disabled={interviewSetupLoading}
                   value={interviewResumeId}
-                  onChange={(event) =>
-                    setInterviewResumeId(event.target.value)
-                  }
-                >
-                  {!interviewResumes.length && (
-                    <option value="">暂无已确认简历</option>
-                  )}
-                  {interviewResumes.map((resume) => (
-                    <option key={resume.id} value={resume.id}>
-                      {resume.display_name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="radar-metadata grid grid-cols-2 gap-3">
-                <label className="text-xs text-muted">
-                  面试时长
-                  <select
-                    aria-label="面试时长"
-                    className="mt-1 block w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm text-ink"
-                    value={interviewDuration}
-                    onChange={(event) =>
-                      setInterviewDuration(
-                        Number(event.target.value) as 10 | 15 | 20,
-                      )
-                    }
-                  >
-                    <option value={10}>10 分钟 · 5 题</option>
-                    <option value={15}>15 分钟 · 5 题</option>
-                    <option value={20}>20 分钟 · 5 题</option>
-                  </select>
-                </label>
-                <label className="text-xs text-muted">
-                  面试难度
-                  <select
-                    aria-label="面试难度"
-                    className="mt-1 block w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm text-ink"
+                  placeholder="暂无已确认简历"
+                  onChange={setInterviewResumeId}
+                  options={interviewResumes.map((resume) => ({ value: resume.id, label: resume.display_name }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="oc-field-label">
+                  <span>面试时长</span>
+                  <OcSelect
+                    ariaLabel="面试时长"
+                    value={String(interviewDuration)}
+                    onChange={(value) => setInterviewDuration(Number(value) as 10 | 15 | 20)}
+                    options={[10, 15, 20].map((minutes) => ({ value: String(minutes), label: `${minutes} 分钟 · 5 题` }))}
+                  />
+                </div>
+                <div className="oc-field-label">
+                  <span>面试难度</span>
+                  <OcSelect
+                    ariaLabel="面试难度"
                     value={interviewDifficulty}
-                    onChange={(event) =>
-                      setInterviewDifficulty(
-                        event.target.value as
-                          | "simple"
-                          | "standard"
-                          | "deep",
-                      )
-                    }
-                  >
-                    <option value="simple">简单</option>
-                    <option value="standard">标准</option>
-                    <option value="deep">深入</option>
-                  </select>
-                </label>
+                    onChange={(value) => setInterviewDifficulty(value as "simple" | "standard" | "deep")}
+                    options={[{ value: "simple", label: "简单", hint: "基础问题，热身练习" }, { value: "standard", label: "标准", hint: "接近真实面试" }, { value: "deep", label: "深入", hint: "追问细节与原理" }]}
+                  />
+                </div>
               </div>
               {interviewSetupLoading && (
                 <p className="text-sm text-muted">正在读取面试资料…</p>
               )}
               {interviewSetupError && (
-                <p role="alert" className="text-sm text-red-700">
+                <p role="alert" className="oc-alert">
                   {interviewSetupError}
                 </p>
               )}
             </div>
-            <footer className="mt-5 flex justify-end gap-2">
+            <footer>
               <button
-                className="rounded-lg border border-line px-4 py-2 text-sm"
+                className="oc-btn"
                 onClick={() => setInterviewJob(null)}
               >
                 取消
               </button>
               <button
-                className="rounded-lg bg-accent px-4 py-2 text-sm text-white disabled:opacity-40"
+                className="oc-btn oc-btn-primary"
                 disabled={
                   interviewSetupLoading || !interviewResumeId
                 }
@@ -1097,6 +1074,16 @@ export function CareerJobsView({
               </button>
             </footer>
           </section>
+        </div>
+      )}
+      {notice && (
+        <div role="status" className="oc-toast">
+          <Icon name="check" size={15} className="text-ok shrink-0" />
+          <span className="min-w-0 truncate">{notice.text}</span>
+          {notice.applicationId && onOpenApplication && (
+            <button type="button" className="oc-toast-action" onClick={() => { const id = notice.applicationId!; setNotice(null); onOpenApplication(id); }}>去查看</button>
+          )}
+          <button type="button" className="oc-toast-close" aria-label="关闭提示" onClick={() => setNotice(null)}><Icon name="x" size={14} /></button>
         </div>
       )}
     </main>

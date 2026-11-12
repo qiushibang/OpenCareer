@@ -245,7 +245,7 @@ export function SkillsTab({
       />
 
       {error ? (
-        <div className="text-[12.5px] text-red-500 mb-3" role="alert">
+        <div className="text-[12.5px] text-danger mb-3" role="alert">
           {error}
         </div>
       ) : null}

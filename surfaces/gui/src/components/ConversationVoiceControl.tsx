@@ -55,7 +55,7 @@ export function ConversationVoiceControl({
           <div className="min-w-[120px]">
             <VoiceRecordingMeter active level={level} />
           </div>
-          <span className="text-[11.5px] text-red-600">
+          <span className="text-[11.5px] text-danger">
             正在录音
           </span>
           <button
@@ -67,7 +67,7 @@ export function ConversationVoiceControl({
           </button>
           <button
             type="button"
-            className="text-[11.5px] text-red-700 hover:text-red-800"
+            className="text-[11.5px] text-danger hover:text-danger"
             onClick={() => void onStop()}
           >
             停止录音
@@ -89,7 +89,7 @@ export function ConversationVoiceControl({
 
       {error && (
         <span
-          className="max-w-[240px] truncate text-[11.5px] text-red-600"
+          className="max-w-[240px] truncate text-[11.5px] text-danger"
           role="alert"
           title={error}
         >

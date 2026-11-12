@@ -561,7 +561,7 @@ def draft_job_subscription(title: str, condition: dict, channel_ids: list[str] |
     try:
         if not channel_ids:
             from .services.job_catalog import validate_condition
-            service = _subscriptions()
+            _subscriptions()  # Enforces local mode before returning setup guidance.
             validate_condition(condition)
             return _ok({"kind":"job_subscription_setup", "requires_channel_setup":True, "requires_user_confirmation":True,
                         "message":"请点击对话下方的配置岗位订阅，在飞书扫码连接后确认时间和条件；不要在聊天里填写凭据。"})

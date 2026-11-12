@@ -280,8 +280,8 @@ export function CareerProfileView({
 
   if (loading) {
     return (
-      <main className="oc-page oc-profile flex-1 grid place-items-center bg-paper text-muted">
-        正在加载简历库…
+      <main role="status" className="oc-page oc-profile flex-1 grid place-items-center bg-paper text-muted">
+        <div className="flex items-center gap-2.5 text-[13px]"><span className="waiting-spinner" aria-hidden="true" />正在加载简历库…</div>
       </main>
     );
   }
@@ -290,17 +290,23 @@ export function CareerProfileView({
     return (
       <main className="oc-page oc-profile flex-1 grid place-items-center bg-paper px-8">
         <div className="max-w-md text-center">
-          <div className="w-12 h-12 rounded-xl bg-panel border border-line grid place-items-center mx-auto mb-4">
-            <Icon name="file" size={22} />
+          <div className="oc-empty-icon w-14 h-14 mx-auto mb-5">
+            <Icon name="file" size={24} />
           </div>
-          <h1 className="text-xl font-semibold">尚未建立求职档案</h1>
-          <p className="text-sm text-muted mt-2">{/* 产品说明移至代码：可以导入多份 PDF 或 DOCX 简历，分别用于不同岗位。 */}导入 PDF 或 DOCX 简历。</p>
+          <h1>尚未建立求职档案</h1>
+          <p className="text-sm text-muted mt-2 leading-relaxed">{/* 产品说明移至代码：可以导入多份 PDF 或 DOCX 简历，分别用于不同岗位。 */}导入 PDF 或 DOCX 简历。</p>
           <button
-            className="mt-5 px-4 py-2 rounded-lg bg-accent text-white text-sm"
+            className="oc-btn oc-btn-primary mt-6"
             onClick={onImportResume}
           >
+            <Icon name="plus" size={15} />
             导入简历
           </button>
+          <ul className="mt-8 grid gap-2 text-left text-[12.5px] text-muted">
+            {["支持多份简历，分别用于不同岗位方向", "导入后逐项确认经历，AI 只引用已确认的事实", "原始文件仅保存在本机，可随时删除"].map((tip) => (
+              <li key={tip} className="flex items-start gap-2.5 rounded-[10px] border border-line bg-panel px-3.5 py-2.5"><span className="mt-1.5 w-1.5 h-1.5 shrink-0 rounded-full bg-accent" aria-hidden="true" />{tip}</li>
+            ))}
+          </ul>
         </div>
       </main>
     );
@@ -311,18 +317,20 @@ export function CareerProfileView({
       <div className="max-w-6xl mx-auto px-4 py-5 sm:px-7 sm:py-6">
         <header className="flex flex-col items-start justify-between gap-4 mb-5 sm:flex-row">
           <div>
-            <h1 className="text-xl font-semibold">我的求职档案</h1>
+            <h1>我的求职档案</h1>
+            <p className="oc-page-subtitle">共 {resumes.length} 份简历 · 所有内容基于已确认的真实经历</p>
             {/* 产品说明移至代码：管理多份定制简历；所有内容仍基于已确认的真实经历。 */}
           </div>
           <div className="flex flex-wrap gap-2">
             <button
-              className="px-3 py-2 rounded-lg bg-accent text-white text-[12.5px]"
+              className="oc-btn oc-btn-primary oc-btn-sm"
               onClick={onImportResume}
             >
+              <Icon name="plus" size={14} />
               新增简历
             </button>
             <button
-              className="px-3 py-2 rounded-lg border border-line text-red-600 text-[12.5px]"
+              className="oc-btn oc-btn-danger oc-btn-sm"
               onClick={() => setDeleteOpen(true)}
             >
               删除全部档案
@@ -331,7 +339,7 @@ export function CareerProfileView({
         </header>
 
         {error && (
-          <div className="mb-4 rounded-lg bg-red-50 text-red-700 px-3 py-2 text-sm">
+          <div className="mb-4 oc-alert">
             {error}
           </div>
         )}
@@ -340,19 +348,20 @@ export function CareerProfileView({
           className="grid grid-cols-1 gap-4 items-start lg:grid-cols-[240px_minmax(0,1fr)]"
           data-testid="career-profile-layout"
         >
-          <aside className="rounded-lg border border-line bg-panel p-2 space-y-1">
-            <div className="px-2 py-1.5 text-[11px] font-semibold text-muted">
+          <aside className="rounded-[14px] border border-line bg-panel p-2 space-y-1 shadow-xs lg:sticky lg:top-4">
+            <div className="px-2 py-1.5 text-[11px] font-semibold tracking-[0.06em] text-faint">
               简历库 · {resumes.length}
             </div>
             {resumes.map((item) => (
               <button
                 key={item.id}
                 className={
-                  "w-full rounded-lg px-3 py-2.5 text-left border " +
+                  "profile-resume-item w-full rounded-[10px] px-3 py-2.5 text-left border " +
                   (selectedId === item.id
-                    ? "border-accent bg-paper"
+                    ? ""
                     : "border-transparent hover:bg-paper")
                 }
+                aria-current={selectedId === item.id ? "true" : undefined}
                 onClick={() => setSelectedId(item.id)}
               >
                 <div className="text-[12.5px] font-medium break-words">
@@ -379,7 +388,7 @@ export function CareerProfileView({
           </aside>
 
           <section className="min-w-0">
-            <div className="flex gap-4 overflow-x-auto border-b border-line mb-5 sm:gap-5">
+            <div className="oc-tabs mb-5" role="group" aria-label="简历视图">
               {(
                 [
                   ["profile", "简历内容"],
@@ -389,12 +398,7 @@ export function CareerProfileView({
               ).map(([key, label]) => (
                 <button
                   key={key}
-                  className={
-                    "pb-2.5 text-[13px] " +
-                    (tab === key
-                      ? "text-accent border-b-2 border-accent font-medium"
-                      : "text-muted")
-                  }
+                  aria-pressed={tab === key}
                   onClick={() => setTab(key)}
                 >
                   {label}
@@ -410,7 +414,7 @@ export function CareerProfileView({
 
             {!detailLoading && tab === "profile" && resume && (
               <div className="space-y-3">
-                <div className="rounded-lg border border-line bg-panel p-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+                <div className="rounded-lg border border-line bg-panel p-5 flex flex-col items-start justify-between gap-3 shadow-xs sm:flex-row sm:items-center">
                   <div className="min-w-0">
                     <div className="text-lg font-semibold">
                       {resume.display_name}
@@ -434,22 +438,25 @@ export function CareerProfileView({
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <button
-                      className="px-3 py-1.5 rounded-lg border border-line text-[12px]"
+                      className="oc-btn oc-btn-sm"
                       onClick={openEdit}
                     >
+                      <Icon name="pencil" size={13} />
                       编辑信息
                     </button>
                     <button
-                      className="px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-[12px]"
-                      onClick={() => setResumeDeleteOpen(true)}
-                    >
-                      删除此简历
-                    </button>
-                    <button
-                      className="px-3 py-1.5 rounded-lg border border-line text-[12px]"
+                      className="oc-btn oc-btn-sm"
                       onClick={() => void loadResume(true)}
                     >
+                      <Icon name="shield" size={13} />
                       显示敏感信息
+                    </button>
+                    <button
+                      className="oc-btn oc-btn-danger oc-btn-sm"
+                      onClick={() => setResumeDeleteOpen(true)}
+                    >
+                      <Icon name="trash" size={13} />
+                      删除此简历
                     </button>
                   </div>
                 </div>
@@ -459,7 +466,7 @@ export function CareerProfileView({
                       key={section}
                       className="rounded-lg border border-line bg-panel p-4"
                     >
-                      <h2 className="text-sm font-semibold mb-3">
+                      <h2 className="oc-section-title">
                         {SECTION_NAMES[section] || section}
                       </h2>
                       <FactValue value={value} section={section} />
@@ -485,7 +492,7 @@ export function CareerProfileView({
                   </div>
                   {original && (
                     <button
-                      className="px-3 py-1.5 rounded-lg border border-line text-[12px]"
+                      className="oc-btn oc-btn-sm"
                       onClick={() =>
                         void downloadCareerResumeOriginal(
                           selectedId,
@@ -493,15 +500,16 @@ export function CareerProfileView({
                         )
                       }
                     >
+                      <Icon name="download" size={13} />
                       下载原文件
                     </button>
                   )}
                 </div>
                 {previewError ? (
                   <div className="h-64 flex flex-col items-center justify-center gap-3">
-                    <p role="alert" className="text-red-600">{previewError}</p>
+                    <p role="alert" className="text-danger text-sm">{previewError}</p>
                     <button
-                      className="px-3 py-1.5 rounded-lg border border-line text-[12px]"
+                      className="oc-btn oc-btn-sm"
                       onClick={() => setPreviewAttempt((attempt) => attempt + 1)}
                     >
                       重新加载预览
@@ -552,8 +560,8 @@ export function CareerProfileView({
                   </article>
                 ))}
                 {versions.length === 0 && (
-                  <div className="text-center text-muted py-16">
-                    暂无版本记录
+                  <div className="oc-empty">
+                    <strong>暂无版本记录</strong>
                   </div>
                 )}
               </div>
@@ -562,20 +570,20 @@ export function CareerProfileView({
         </div>
 
         {editOpen && resume && (
-          <div className="fixed inset-0 z-50 bg-black/30 grid place-items-center px-5">
+          <div className="oc-dialog-backdrop">
             <div
               role="dialog"
               aria-modal="true"
               aria-labelledby="resume-edit-title"
-              className="w-full max-w-md rounded-xl bg-panel border border-line p-5 shadow-xl"
+              className="oc-dialog max-w-md"
             >
-              <h2 id="resume-edit-title" className="font-semibold">
+              <h2 id="resume-edit-title" className="text-[17px] font-semibold">
                 编辑简历信息
               </h2>
               <label className="block text-sm mt-4">
                 <span className="text-muted">简历名称</span>
                 <input
-                  className="w-full mt-1.5 px-3 py-2 rounded-lg border border-line bg-paper"
+                  className="oc-field mt-1.5"
                   value={editName}
                   onChange={(event) => setEditName(event.target.value)}
                 />
@@ -583,7 +591,7 @@ export function CareerProfileView({
               <label className="block text-sm mt-4">
                 <span className="text-muted">目标岗位</span>
                 <textarea
-                  className="w-full min-h-24 mt-1.5 px-3 py-2 rounded-lg border border-line bg-paper"
+                  className="oc-field min-h-24 mt-1.5"
                   placeholder="使用逗号或换行分隔，最多 10 个"
                   value={editRoles}
                   onChange={(event) => setEditRoles(event.target.value)}
@@ -591,13 +599,13 @@ export function CareerProfileView({
               </label>
               <div className="flex justify-end gap-2 mt-4">
                 <button
-                  className="px-3 py-2 text-sm"
+                  className="oc-btn oc-btn-ghost"
                   onClick={() => setEditOpen(false)}
                 >
                   取消
                 </button>
                 <button
-                  className="px-3 py-2 rounded-lg bg-accent text-white text-sm disabled:opacity-40"
+                  className="oc-btn oc-btn-primary"
                   disabled={!editName.trim()}
                   onClick={() => void saveResumeMetadata()}
                 >
@@ -609,14 +617,14 @@ export function CareerProfileView({
         )}
 
         {resumeDeleteOpen && resume && (
-          <div className="fixed inset-0 z-50 bg-black/30 grid place-items-center px-5">
+          <div className="oc-dialog-backdrop">
             <div
               role="dialog"
               aria-modal="true"
               aria-labelledby="resume-delete-title"
-              className="w-full max-w-md rounded-xl bg-panel border border-line p-5 shadow-xl"
+              className="oc-dialog max-w-md"
             >
-              <h2 id="resume-delete-title" className="font-semibold">
+              <h2 id="resume-delete-title" className="text-[17px] font-semibold">
                 删除此简历
               </h2>
               <p className="text-sm text-muted mt-2">
@@ -628,7 +636,7 @@ export function CareerProfileView({
               <label className="block text-sm mt-3">
                 <span className="sr-only">输入简历名称</span>
                 <input
-                  className="w-full px-3 py-2 rounded-lg border border-line bg-paper"
+                  className="oc-field"
                   value={resumeDeleteText}
                   onChange={(event) =>
                     setResumeDeleteText(event.target.value)
@@ -637,7 +645,7 @@ export function CareerProfileView({
               </label>
               <div className="flex justify-end gap-2 mt-4">
                 <button
-                  className="px-3 py-2 text-sm"
+                  className="oc-btn oc-btn-ghost"
                   onClick={() => {
                     setResumeDeleteOpen(false);
                     setResumeDeleteText("");
@@ -646,7 +654,7 @@ export function CareerProfileView({
                   取消
                 </button>
                 <button
-                  className="px-3 py-2 rounded-lg bg-red-600 text-white text-sm disabled:opacity-40"
+                  className="oc-btn oc-btn-danger-solid"
                   disabled={resumeDeleteText !== resume.display_name}
                   onClick={() => void removeResume()}
                 >
@@ -658,27 +666,27 @@ export function CareerProfileView({
         )}
 
         {deleteOpen && (
-          <div className="fixed inset-0 z-50 bg-black/30 grid place-items-center px-5">
-            <div className="w-full max-w-md rounded-xl bg-panel border border-line p-5 shadow-xl">
-              <h2 className="font-semibold">确认删除全部求职档案</h2>
+          <div className="oc-dialog-backdrop">
+            <div role="dialog" aria-modal="true" aria-label="确认删除全部求职档案" className="oc-dialog max-w-md">
+              <h2 className="text-[17px] font-semibold">确认删除全部求职档案</h2>
               <p className="text-sm text-muted mt-2">
                 此操作会删除全部简历、事实档案、版本记录和私有原文件，无法撤销。
               </p>
               <input
-                className="w-full mt-4 px-3 py-2 rounded-lg border border-line bg-paper text-sm"
+                className="oc-field mt-4"
                 placeholder="请输入“删除我的求职档案”"
                 value={deleteText}
                 onChange={(event) => setDeleteText(event.target.value)}
               />
               <div className="flex justify-end gap-2 mt-4">
                 <button
-                  className="px-3 py-2 text-sm"
+                  className="oc-btn oc-btn-ghost"
                   onClick={() => setDeleteOpen(false)}
                 >
                   取消
                 </button>
                 <button
-                  className="px-3 py-2 rounded-lg bg-red-600 text-white text-sm disabled:opacity-40"
+                  className="oc-btn oc-btn-danger-solid"
                   disabled={deleteText !== "删除我的求职档案"}
                   onClick={() => void removeProfile()}
                 >

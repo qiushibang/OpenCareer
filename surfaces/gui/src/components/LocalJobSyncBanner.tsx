@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { getLocalJobSync, refreshLocalJobs, isLocal, type LocalJobSyncStatus } from "../api";
+import { Icon } from "./Icon";
 
 export function LocalJobSyncBanner({ onUpdated, showStatus = true }: { onUpdated: () => void; showStatus?: boolean }) {
   const [status, setStatus] = useState<LocalJobSyncStatus | null>(null);
@@ -36,18 +37,19 @@ export function LocalJobSyncBanner({ onUpdated, showStatus = true }: { onUpdated
   const running = status?.state === "running" && Date.now() / 1000 - status.updated_at < 1200;
   const current = status?.sources.find(s => s.status === "running");
   const failed = status?.sources.filter(s => s.status === "failed" || ["failed", "degraded"].includes(s.upstream_status || "")) || [];
-  if (!showStatus) return <div className="mb-3 flex flex-wrap items-center gap-3">
-    <button type="button" className="rounded-lg border border-line px-3 py-2 text-sm text-accent disabled:opacity-50" disabled={running||pending} onClick={async()=>{
+  if (!showStatus) return <div className="flex flex-wrap items-center gap-2">
+    <button type="button" className="oc-btn oc-btn-sm" disabled={running||pending} onClick={async()=>{
       setPending(true);setError("");
       try{const result=await refreshLocalJobs();if(!result.ok)throw new Error();setError(result.queued?"已请求同步，完成后岗位列表会自动更新。":"同步正在处理中，或刚刚请求过，请稍后查看。");}
       catch{setError("暂时无法同步，请确认本地服务仍在运行。");}finally{setPending(false);}
-    }}>{running?"正在同步岗位…":pending?"正在请求…":"一键同步岗位"}</button>
+    }}><Icon name="refresh" size={14} className={running||pending ? "animate-spin" : undefined}/>{running?"正在同步岗位…":pending?"正在请求…":"一键同步岗位"}</button>
     {error&&<p role="status" className="text-xs text-muted">{error}</p>}
   </div>;
   return (
-    <div className="mb-3 rounded-xl border border-line bg-paper px-3 py-2.5 text-[12px]" aria-label="官方岗位采集">
+    <div className="mb-3 rounded-xl border border-line bg-paper px-3.5 py-3 text-[12px]" aria-label="官方岗位采集">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p role="status">
+        <p role="status" className="flex items-center gap-2 font-medium text-ink">
+          <span className={"inline-block w-1.5 h-1.5 rounded-full shrink-0 " + (running ? "bg-accent animate-pulse" : failed.length ? "bg-warnInk" : "bg-ok")} aria-hidden="true" />
           {status?.error_code === "FEED_UNAVAILABLE" ? "公共岗位目录暂时无法同步，请检查网络并稍后重试；已保存的数据不会清除。"
             : status?.error_code === "LOCAL_CRAWL_UNAVAILABLE" ? "本地采集暂时无法运行，请检查启动终端；已保存的数据不会清除。"
             : running ? `正在${shared ? "同步公共岗位目录" : "采集官方岗位"} · 已完成 ${status?.completed}/${status?.total_sources} 个来源${current ? ` · ${current.name}${current.observed_unique !== undefined ? ` · 已读取 ${current.observed_unique} 个候选，正在完整性核验` : ""}` : ""}`
@@ -55,7 +57,7 @@ export function LocalJobSyncBanner({ onUpdated, showStatus = true }: { onUpdated
             : status?.state === "partial" ? `岗位已分批入库 · ${status.completed} 个来源成功，${status.failed} 个来源暂不可用`
             : "等待后台加载官方岗位…"}
         </p>
-        <button type="button" disabled={running || pending} className="shrink-0 rounded-lg border border-line px-2.5 py-1 text-ink disabled:opacity-40"
+        <button type="button" disabled={running || pending} className="oc-btn oc-btn-sm shrink-0"
           onClick={async () => {
             setPending(true);
             try {

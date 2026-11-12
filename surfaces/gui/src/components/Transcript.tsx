@@ -366,7 +366,7 @@ export function Transcript({ items, running, streamingText, onRetry }: Props) {
   // breakers (user, connector, notices, plan/dir requests…). Trailing assistant texts are the
   // ANSWER and render as bubbles after the group; interior assistant texts are narration and
   // stay inside. A run with no activity at all is just bubbles (unchanged chat behavior).
-  const blocks: Array<{ turn: TurnItem[]; live?: boolean } | { item: Item; i: number } | { actions:ToolItem[] }> = [];
+  const blocks: Array<{ turn: TurnItem[]; live?: boolean } | { item: Item; i: number; actions?: ToolItem[] } | { actions:ToolItem[]; item?: never }> = [];
   let run: TurnItem[] = [];
   const flush = (live = false) => {
     if (!run.length) return;
@@ -382,8 +382,11 @@ export function Transcript({ items, running, streamingText, onRetry }: Props) {
         answers.unshift(turn.pop() as AssistantItem);
     if (turn.some((it) => it.kind !== "assistant")) blocks.push({ turn, live });
     else turn.forEach((t) => blocks.push({ item: t, i: -1 }));
-    answers.forEach((a) => blocks.push({ item: a, i: -1 }));
-    if(!live&&actionTools.length)blocks.push({actions:actionTools});
+    answers.forEach((a, index) => blocks.push({
+      item: a, i: -1,
+      actions: !live && actionTools.length && a.text && index === answers.length - 1 ? actionTools : undefined,
+    }));
+    if (!live && actionTools.length && !answers[answers.length - 1]?.text) blocks.push({actions:actionTools});
   };
   items.forEach((item, i) => {
     if (item.kind === "tool" || item.kind === "assistant" || (item.kind === "approval" && item.resolved))
@@ -407,7 +410,7 @@ export function Transcript({ items, running, streamingText, onRetry }: Props) {
   return (
     <div className="transcript">
       {blocks.map((block, bi) => {
-        if("actions" in block)return <CareerQueryActions tools={block.actions} key={bi}/>;
+        if ("actions" in block && !block.item && block.actions) return <CareerQueryActions tools={block.actions} key={bi}/>;
         if ("turn" in block)
           return (
             <TurnGroup
@@ -418,6 +421,7 @@ export function Transcript({ items, running, streamingText, onRetry }: Props) {
             />
           );
         const { item } = block;
+        if (!item) return null;
         switch (item.kind) {
           case "connector":
             return <ConnectorMessageCard source={item.source} key={bi} />;
@@ -451,9 +455,9 @@ export function Transcript({ items, running, streamingText, onRetry }: Props) {
               );
             return (
               <div className="group bubble-assistant" key={bi}>
-                <div className="who">assistant</div>
+                <div className="who">OpenCareer</div>
                 {item.reasoning && <ThinkingBlock text={item.reasoning} />}
-                <Markdown text={item.text} />
+                {block.actions ? <CareerQueryActions tools={block.actions} text={item.text}/> : <Markdown text={item.text}/>}
                 <BubbleMeta text={item.text} ts={item.ts} align="left" />
               </div>
             );
@@ -464,7 +468,7 @@ export function Transcript({ items, running, streamingText, onRetry }: Props) {
                 <span className={"status " + (item.resolved === "granted" ? "ok" : "denied")}>
                   {item.resolved === "granted" ? "✓" : "✕"}
                 </span>
-                <span>{item.resolved === "granted" ? "Granted folder access" : "Declined folder access"}</span>
+                <span>{item.resolved === "granted" ? "已授权访问文件夹" : "已拒绝访问文件夹"}</span>
                 {item.path && <span className="dim">{item.path}</span>}
               </div>
             );
@@ -472,13 +476,13 @@ export function Transcript({ items, running, streamingText, onRetry }: Props) {
             if (!item.resolved) return null; // pending plan renders in the composer head
             return (
               <div className="bubble-assistant" key={bi}>
-                <div className="who">proposed plan</div>
+                <div className="who">执行计划</div>
                 <Markdown text={item.plan} />
                 <div className="approval-inline">
                   <span className={"status " + (item.resolved === "approved" ? "ok" : "denied")}>
                     {item.resolved === "approved" ? "✓" : "✕"}
                   </span>
-                  <span>{item.resolved === "approved" ? "Plan approved" : "Sent back with feedback"}</span>
+                  <span>{item.resolved === "approved" ? "计划已批准" : "已退回并附修改意见"}</span>
                 </div>
               </div>
             );
@@ -489,7 +493,7 @@ export function Transcript({ items, running, streamingText, onRetry }: Props) {
                 {item.requestId && <button className="btn ml-2" onClick={() => openSupport(item.requestId)}>反馈此问题</button>}
                 {item.retriable && !running && onRetry && block.i === retryAnchor(items) && (
                   <button className="btn ml-2" data-testid="notice-retry" onClick={onRetry}>
-                    Retry
+                    重试
                   </button>
                 )}
               </div>

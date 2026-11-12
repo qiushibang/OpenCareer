@@ -39,6 +39,14 @@ export async function careerCatalogRequest<T>(path: string, body?: unknown, meth
     headers: { "Content-Type": "application/json" },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
+  if (path === "catalog/search") {
+    checkCareerJobsRateLimit(response);
+    if (response.status === 503 && response.headers.has("Retry-After")) {
+      const seconds = Number(response.headers.get("Retry-After"));
+      const retryAfterMs = Math.min(60, Math.max(1, seconds || 1)) * 1000;
+      throw Object.assign(new Error("岗位服务繁忙。"), {retryAfterMs});
+    }
+  }
   const result = await response.json();
   if (!response.ok || !result.ok) throw new Error(typeof result.error === "string" ? result.error : "岗位服务暂不可用。");
   return result.data as T;
@@ -2107,14 +2115,6 @@ export async function getCareerJobFilters(): Promise<
   return res.json();
 }
 
-export async function getCareerProfile(
-  includeSensitive = false,
-): Promise<CareerApiResult> {
-  const res = await fetch(
-    `${httpBase()}/v1/career/profile?include_sensitive=${includeSensitive}`,
-  );
-  return res.json();
-}
 
 export async function getCareerResumes(): Promise<CareerApiResult> {
   const res = await fetch(`${httpBase()}/v1/career/resumes`);
@@ -2210,36 +2210,9 @@ export async function downloadCareerResumeOriginal(
   URL.revokeObjectURL(url);
 }
 
-export async function getCareerProfileVersions(): Promise<
-  CareerApiResult
-> {
-  const res = await fetch(`${httpBase()}/v1/career/profile/versions`);
-  return res.json();
-}
 
-export async function getCareerProfileOriginal(): Promise<
-  CareerApiResult
-> {
-  const res = await fetch(`${httpBase()}/v1/career/profile/original`);
-  return res.json();
-}
 
-export async function getCareerOriginalContent(): Promise<string> {
-  const res = await fetch(`${httpBase()}/v1/career/profile/original/content`);
-  if (!res.ok) throw new Error("无法读取原始简历");
-  return URL.createObjectURL(await res.blob());
-}
 
-export async function downloadCareerOriginal(filename: string): Promise<void> {
-  const res = await fetch(`${httpBase()}/v1/career/profile/original/download`);
-  if (!res.ok) throw new Error("无法下载原始简历");
-  const url = URL.createObjectURL(await res.blob());
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
 
 export async function deleteCareerProfile(
   confirmText: string,

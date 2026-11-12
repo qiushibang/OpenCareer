@@ -43,6 +43,16 @@ export type IconName =
   | "table"
   | "mic"
   | "stop"
+  | "help"
+  | "star"
+  | "starFilled"
+  | "external"
+  | "download"
+  | "filter"
+  | "bell"
+  | "target"
+  | "check"
+  | "arrowRight"
   | "x";
 
 export function Icon({
@@ -369,6 +379,76 @@ export function Icon({
           <path d="M10 11v6M14 11v6" />
           <path d="M6.5 7l.9 12c.1.9.8 1.5 1.7 1.5h7.8c.9 0 1.6-.6 1.7-1.5l.9-12" />
           <path d="M9.2 7V4.9c0-.5.4-.9.9-.9h3.8c.5 0 .9.4.9.9V7" />
+        </svg>
+      );
+    case "help":
+      return (
+        <svg {...s}>
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M9.6 9.4a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6" />
+          <circle cx="12" cy="16.9" r=".9" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "star":
+      return (
+        <svg {...s}>
+          <path d="m12 3.8 2.5 5.1 5.6.8-4.1 4 1 5.6-5-2.7-5 2.7 1-5.6-4.1-4 5.6-.8z" />
+        </svg>
+      );
+    case "starFilled":
+      return (
+        <svg {...s} fill="currentColor">
+          <path d="m12 3.8 2.5 5.1 5.6.8-4.1 4 1 5.6-5-2.7-5 2.7 1-5.6-4.1-4 5.6-.8z" />
+        </svg>
+      );
+    case "external":
+      return (
+        <svg {...s}>
+          <path d="M14 4.5h5.5V10" />
+          <path d="M19.5 4.5 11 13" />
+          <path d="M18 14v3.7c0 1-.8 1.8-1.8 1.8H6.3c-1 0-1.8-.8-1.8-1.8V7.8c0-1 .8-1.8 1.8-1.8H10" />
+        </svg>
+      );
+    case "download":
+      return (
+        <svg {...s}>
+          <path d="M12 4v11" />
+          <path d="m7.5 10.5 4.5 4.5 4.5-4.5" />
+          <path d="M5 19.5h14" />
+        </svg>
+      );
+    case "filter":
+      return (
+        <svg {...s}>
+          <path d="M4.5 6h15M7.5 12h9M10.5 18h3" />
+        </svg>
+      );
+    case "bell":
+      return (
+        <svg {...s}>
+          <path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5z" />
+          <path d="M10 20.5a2.2 2.2 0 0 0 4 0" />
+        </svg>
+      );
+    case "check":
+      return (
+        <svg {...s} strokeWidth={2}>
+          <path d="m5.5 12.5 4.2 4.2 8.8-9.4" />
+        </svg>
+      );
+    case "arrowRight":
+      return (
+        <svg {...s}>
+          <path d="M5 12h14" />
+          <path d="m13 6 6 6-6 6" />
+        </svg>
+      );
+    case "target":
+      return (
+        <svg {...s}>
+          <circle cx="12" cy="12" r="8.5" />
+          <circle cx="12" cy="12" r="4.5" />
+          <circle cx="12" cy="12" r=".9" fill="currentColor" stroke="none" />
         </svg>
       );
   }

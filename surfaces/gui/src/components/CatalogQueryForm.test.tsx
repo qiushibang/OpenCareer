@@ -9,7 +9,8 @@ describe("catalog query form", () => {
     const submit = vi.fn();
     render(<CatalogQueryForm onSubmit={submit} />);
     fireEvent.change(screen.getByLabelText("工作城市"), { target: { value: "北京" } });
-    fireEvent.change(await screen.findByLabelText("岗位职能"), { target: { value: "product" } });
+    fireEvent.click(await screen.findByRole("combobox", { name: "岗位职能" }));
+    fireEvent.click(await screen.findByRole("option", { name: "产品" }));
     fireEvent.click(screen.getByRole("button", { name: "应用筛选" }));
     expect(submit.mock.calls[0][0].condition.all).toEqual(expect.arrayContaining([
       { field: "locations", op: "in", values: ["北京"] },

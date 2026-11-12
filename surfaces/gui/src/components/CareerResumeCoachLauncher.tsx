@@ -6,6 +6,7 @@ import {
   type CareerResumeSummary,
 } from "../api";
 import { buildCareerJobSheet, type ResumeCoachLaunchPayload } from "../careerResumeCoach";
+import { Icon } from "./Icon";
 
 export function CareerResumeCoachLauncher({
   job,
@@ -69,25 +70,26 @@ export function CareerResumeCoachLauncher({
   return (
     <>
       <button
-        className="shrink-0 rounded-lg border border-accent px-3.5 py-2 text-[12.5px] text-accent"
+        className="oc-btn oc-btn-accent shrink-0"
         onClick={() => void openLauncher()}
       >
+        <Icon name="sparkle" size={13} />
         AI 分析与改简历
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4">
+        <div className="oc-dialog-backdrop">
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="career-resume-coach-title"
-            className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-lg border border-line bg-panel p-4 shadow-xl sm:p-5"
+            className="oc-dialog max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto"
           >
-            <header className="flex items-start justify-between gap-4">
+            <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <h2
                   id="career-resume-coach-title"
-                  className="text-base font-semibold"
+                  className="text-[17px] font-semibold tracking-[-0.02em]"
                 >
                   选择用于分析的简历
                 </h2>
@@ -96,21 +98,21 @@ export function CareerResumeCoachLauncher({
                 </p>
               </div>
               <button
-                className="shrink-0 text-sm text-muted"
+                className="oc-btn oc-btn-ghost oc-btn-sm shrink-0"
                 onClick={() => setOpen(false)}
               >
                 关闭
               </button>
-            </header>
+            </div>
 
             {error && (
-              <div className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              <div className="mt-4 oc-alert">
                 {error}
               </div>
             )}
 
             {loading ? (
-              <div className="py-10 text-center text-sm text-muted">
+              <div role="status" className="py-10 text-center text-sm text-muted">
                 正在读取简历…
               </div>
             ) : resumes.length === 0 ? (
@@ -120,7 +122,7 @@ export function CareerResumeCoachLauncher({
                 {resumes.map((resume) => (
                   <label
                     key={resume.id}
-                    className="flex min-w-0 items-start gap-3 rounded-lg border border-line bg-paper p-3"
+                    className="flex min-w-0 cursor-pointer items-center gap-3 rounded-[10px] border border-line bg-panel p-3 hover:border-lineStrong has-[:checked]:border-accentLine has-[:checked]:bg-accentSoft/40"
                   >
                     <input
                       type="radio"
@@ -137,9 +139,9 @@ export function CareerResumeCoachLauncher({
               </div>
             )}
 
-            <div className="mt-4 flex justify-end">
+            <div className="mt-5 flex justify-end">
               <button
-                className="rounded-lg bg-accent px-4 py-2 text-sm text-white disabled:opacity-40"
+                className="oc-btn oc-btn-primary"
                 disabled={!selectedId || loading}
                 onClick={submit}
               >

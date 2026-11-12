@@ -1,3 +1,4 @@
+import type { TagTone } from "./components/OcSelect";
 import { careerCatalogRequest } from "./api";
 
 export const APPLICATION_STATUS: Record<string,string> = {not_started:"未开始",preparing:"准备投递",applied:"已投递",assessment:"笔试／测评中",interviewing:"面试中",offer:"已获 Offer",accepted:"已接受 Offer",rejected:"未通过",withdrawn:"已撤回"};
@@ -9,6 +10,12 @@ export function interviewNotes(record: Record<string,unknown>): string {
 }
 export const PRIORITY: Record<string,string> = {high:"优先",normal:"普通",low:"备选"};
 export const RECRUITMENT: Record<string,string> = {"":"未记录",experienced:"社会招聘",campus:"校园招聘",internship:"实习"};
+// Fixed tag colours: one family per outcome so tables scan at a glance.
+export const STATUS_TONE: Record<string,TagTone> = {not_started:"gray",preparing:"yellow",applied:"blue",assessment:"purple",interviewing:"orange",offer:"green",accepted:"teal",rejected:"red",withdrawn:"gray"};
+export const PRIORITY_TONE: Record<string,TagTone> = {high:"red",normal:"gray",low:"blue"};
+export const RECRUITMENT_TONE: Record<string,TagTone> = {experienced:"orange",campus:"blue",internship:"purple"};
+export const STAGE_TONE: Record<string,TagTone> = {"":"gray","准备投递":"yellow","已投递":"blue","笔试":"purple","一面":"orange","二面":"orange","三面":"orange","四面":"orange","待反馈":"pink","Offer沟通":"green","已结束":"gray"};
+export const ROUND_RESULT_TONE: Record<string,TagTone> = {pending:"yellow",passed:"green",failed:"red",unknown:"gray"};
 export const ARRANGEMENT: Record<string,string> = {unscheduled:"待安排",scheduled:"已约时间",completed:"已完成",cancelled:"已取消"};
 export const ROUND_RESULT: Record<string,string> = {pending:"待反馈",passed:"通过",failed:"未通过",unknown:"未记录"};
 export const ROUND_KIND: Record<string,string> = {business:"业务面",technical:"技术面",hr:"HR面",final:"终面",extra:"加面",group:"群面",other:"其他"};

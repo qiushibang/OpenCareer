@@ -261,6 +261,8 @@ export function App() {
     "session" | "jobs" | "applications" | "profile" | "scheduled" | "integrations" | "audit" | "inbox" | "persona" | "settings"
   >("session");
   const [applicationOpenId,setApplicationOpenId] = useState<string|null>(null);
+  // Set only when the radar opened a record, so the drawer can offer a way back.
+  const [applicationFromRadar,setApplicationFromRadar] = useState(false);
   useEffect(() => {
     const openCatalog = () => setSurface("jobs");
     window.addEventListener("opencareer:catalog-open", openCatalog);
@@ -1704,7 +1706,7 @@ export function App() {
         onOpenCareerProfile={() => {setMobileNavOpen(false);setSurface("profile");}}
         careerJobsActive={surface === "jobs"}
         careerProfileActive={surface === "profile"}
-        onOpenCareerApplications={isLocal() ? () => {setMobileNavOpen(false);setApplicationOpenId(null);setSurface("applications");} : undefined}
+        onOpenCareerApplications={isLocal() ? () => {setMobileNavOpen(false);setApplicationOpenId(null);setApplicationFromRadar(false);setSurface("applications");} : undefined}
         careerApplicationsActive={surface === "applications"}
         collapsed={effectiveNavCollapsed}
         onCollapse={toggleNav}
@@ -1721,7 +1723,7 @@ export function App() {
         <>
           <CareerJobsView
             onConfigureSubscription={context => {const id=startNewSession("career");setSubscriptionGuide({sessionId:id,context});prefillComposer("");}}
-            onOpenApplication={(id) => {setApplicationOpenId(id);setSurface("applications");}}
+            onOpenApplication={(id) => {setApplicationOpenId(id);setApplicationFromRadar(true);setSurface("applications");}}
             onStartResumeCoach={startResumeCoach}
             onStartInterview={(payload) =>
               void startMockInterview(payload)
@@ -1730,7 +1732,7 @@ export function App() {
           {resumeCoachLaunchError && (
             <div
               role="alert"
-              className="fixed bottom-5 right-5 z-50 max-w-sm rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 shadow-lg"
+              className="fixed bottom-5 right-5 z-50 max-w-sm rounded-xl bg-dangerSoft px-4 py-3 text-sm text-danger shadow-lg"
             >
               {resumeCoachLaunchError}
             </div>
@@ -1738,14 +1740,14 @@ export function App() {
           {interviewLaunchError && (
             <div
               role="alert"
-              className="fixed bottom-5 right-5 z-50 max-w-sm rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 shadow-lg"
+              className="fixed bottom-5 right-5 z-50 max-w-sm rounded-xl bg-dangerSoft px-4 py-3 text-sm text-danger shadow-lg"
             >
               {interviewLaunchError}
             </div>
           )}
         </>
       ) : surface === "applications" ? (
-        <ApplicationsView initialId={applicationOpenId}/>
+        <ApplicationsView initialId={applicationOpenId} onBack={applicationFromRadar ? () => {setApplicationFromRadar(false);setSurface("jobs");} : undefined} backLabel="返回岗位雷达"/>
       ) : surface === "profile" ? (
         <CareerProfileView onImportResume={openResumeImporter} />
       ) : surface === "scheduled" ? (
