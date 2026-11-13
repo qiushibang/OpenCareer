@@ -23,6 +23,7 @@ import {
 import type { ResumeCoachLaunchPayload } from "../careerResumeCoach";
 import { CareerResumeCoachLauncher } from "./CareerResumeCoachLauncher";
 import { Icon } from "./Icon";
+import { supportsApplications } from "../applicationsSupport";
 import { OcSelect, Tag } from "./OcSelect";
 import { STATUS_TONE } from "../applications";
 import { LocalJobSyncBanner } from "./LocalJobSyncBanner";
@@ -123,6 +124,8 @@ export function CareerJobsView({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showSubscriptions, setShowSubscriptions] = useState(false);
   const standalone = typeof isLocal === "function" && isLocal();
+  // Personal applications also exist on the hosted build; filters/subscriptions stay local-only.
+  const canTrack = standalone || supportsApplications();
   const [subscriptionDraft,setSubscriptionDraft]=useState<{title?:string;send_time?:string;subscription_id?:string;channel_ids?:string[]}>();
   useEffect(() => {
     const read = () => {
@@ -839,7 +842,7 @@ export function CareerJobsView({
               </div>
 
               <section className="rounded-[14px] border border-line bg-[color-mix(in_srgb,var(--paper)_55%,var(--panel))] p-4 space-y-3">
-                {standalone && onOpenApplication && (() => {
+                {canTrack && onOpenApplication && (() => {
                   // Adding is a quick bookmark: stay on the radar and offer a link. Only an
                   // already-tracked job navigates, because then the user wants the record.
                   const tracked = detail.tracking.application_status !== "not_started";
@@ -856,7 +859,7 @@ export function CareerJobsView({
                     </button>
                   </div>;
                 })()}
-                <details open={!standalone}>
+                <details open={!canTrack}>
                 <summary className="inline-flex items-center gap-1 text-xs text-muted cursor-pointer mb-3 hover:text-ink"><Icon name="chevronRight" size={12} className="transition-transform" />原申请进度与备注（快速编辑）</summary>
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold">
@@ -941,7 +944,7 @@ export function CareerJobsView({
                   )}
                 </div>
                 </details>
-                {standalone && trackingError && <p role="alert" className="text-xs text-danger">{trackingError}</p>}
+                {canTrack && trackingError && <p role="alert" className="text-xs text-danger">{trackingError}</p>}
               </section>
 
               <section>

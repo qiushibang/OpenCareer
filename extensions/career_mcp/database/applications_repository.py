@@ -67,6 +67,13 @@ class ApplicationsRepository:
             self.connection.execute("INSERT INTO career_application_interviews(id,application_id,data_json,created_at,updated_at) VALUES (?,?,?,?,?)", (interview_id, application_id, json.dumps(data, ensure_ascii=False), now, now))
         return next(row for row in self.interviews(application_id) if row["id"] == interview_id)
 
+    def resume_option(self, resume_id: str) -> dict | None:
+        row = self.connection.execute("SELECT display_name,original_filename,content_hash FROM resume_imports WHERE id=? AND status!='deleted'", (resume_id,)).fetchone()
+        return None if row is None else {"display_name": row["display_name"], "original_filename": row["original_filename"], "content_hash": row["content_hash"]}
+
+    def delete_interview(self, application_id: str, interview_id: str, version: int) -> bool:
+        return self.connection.execute("DELETE FROM career_application_interviews WHERE id=? AND application_id=? AND version=?", (interview_id, application_id, version)).rowcount == 1
+
     def job_snapshot(self, job_id: str) -> dict:
         row = self.connection.execute("SELECT j.*,c.name AS company FROM jobs j JOIN companies c ON c.id=j.company_id WHERE j.id=?", (job_id,)).fetchone()
         if row is None:
@@ -93,28 +100,36 @@ class ApplicationsRepository:
             self.event(application_id, "migrated", "已保留旧申请进度与备注；历史面试轮次未推断", row["updated_at"])
 
     def mirror_tracking(self, application: dict, now: str) -> None:
-        if not application["job_id"] or not application["is_current"]:
-            return
         from .job_tracking_repository import JobTrackingRepository
-        tracking = JobTrackingRepository(self.connection)
-        old = tracking.get(application["job_id"])
-        applied_at = application["applied_on"] + "T00:00:00+08:00" if application["applied_on"] else None
-        if old and old["applied_at"] and application["applied_on"]:
-            old_day = datetime.fromisoformat(old["applied_at"].replace("Z", "+00:00")).astimezone(ZoneInfo("Asia/Shanghai")).date().isoformat()
-            if old_day == application["applied_on"]:
-                applied_at = old["applied_at"]
-        values = {"job_id": application["job_id"], "is_favorite": old["is_favorite"] if old else False,
-                  "favorited_at": old["favorited_at"] if old else None, "application_status": application["status"],
-                  "applied_at": applied_at,
-                  "note": application["notes"] or None, "created_at": old["created_at"] if old else now, "updated_at": now}
-        if old and all(old[key] == values[key] for key in ("application_status", "applied_at", "note")):
-            return
-        if old:
-            tracking.update_if_version(values, old["version"])
-        else:
-            tracking.insert(values)
-        if not old or old["application_status"] != values["application_status"]:
-            tracking.add_status_event(event_id=str(uuid4()), job_id=application["job_id"], from_status=old["application_status"] if old else "not_started", to_status=values["application_status"], occurred_at=now)
+        mirror_application_to_tracking(JobTrackingRepository(self.connection), application, now)
+
+
+def mirror_application_to_tracking(tracking, application: dict, now: str) -> None:
+    """Keep the legacy per-job tracking row in step with the current application.
+
+    `tracking` is any job-tracking repository (SQLite or PostgreSQL) with
+    get/insert/update_if_version/add_status_event.
+    """
+    if not application["job_id"] or not application["is_current"]:
+        return
+    old = tracking.get(application["job_id"])
+    applied_at = application["applied_on"] + "T00:00:00+08:00" if application["applied_on"] else None
+    if old and old["applied_at"] and application["applied_on"]:
+        old_day = datetime.fromisoformat(old["applied_at"].replace("Z", "+00:00")).astimezone(ZoneInfo("Asia/Shanghai")).date().isoformat()
+        if old_day == application["applied_on"]:
+            applied_at = old["applied_at"]
+    values = {"job_id": application["job_id"], "is_favorite": old["is_favorite"] if old else False,
+              "favorited_at": old["favorited_at"] if old else None, "application_status": application["status"],
+              "applied_at": applied_at,
+              "note": application["notes"] or None, "created_at": old["created_at"] if old else now, "updated_at": now}
+    if old and all(old[key] == values[key] for key in ("application_status", "applied_at", "note")):
+        return
+    if old:
+        tracking.update_if_version(values, old["version"])
+    else:
+        tracking.insert(values)
+    if not old or old["application_status"] != values["application_status"]:
+        tracking.add_status_event(event_id=str(uuid4()), job_id=application["job_id"], from_status=old["application_status"] if old else "not_started", to_status=values["application_status"], occurred_at=now)
 
 
 def tracking_changed(connection: sqlite3.Connection, tracking: dict) -> None:

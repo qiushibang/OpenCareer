@@ -17,11 +17,19 @@ OFFICIAL_FIELDS = {"company", "title", "location", "recruitment_type", "departme
 
 
 class Applications:
-    def __init__(self, config: CareerConfig | None = None) -> None:
-        self.config = config or CareerConfig.from_env()
+    def __init__(self, config: CareerConfig | None = None, *, repository_session=None) -> None:
+        # Hosted deployments inject a per-tenant PostgreSQL repository session;
+        # local mode keeps using the SQLite file.
+        self._repository_session = repository_session
+        self.config = config or (None if repository_session else CareerConfig.from_env())
 
     @contextmanager
     def _session(self) -> Iterator[ApplicationsRepository]:
+        if self._repository_session is not None:
+            with self._repository_session() as repo:
+                repo.migrate_legacy()
+                yield repo
+            return
         db = connect(self.config.database_path)
         try:
             db.execute("PRAGMA busy_timeout=10000")
@@ -109,7 +117,7 @@ class Applications:
         if not data["resume_import_id"]:
             data["resume_sha256"] = ""
             return
-        row = repo.connection.execute("SELECT display_name,original_filename,content_hash FROM resume_imports WHERE id=? AND status!='deleted'", (data["resume_import_id"],)).fetchone()
+        row = repo.resume_option(data["resume_import_id"])
         if row is None:
             raise ValueError("所选简历已不可用，请重新选择；申请内容不会清除。")
         data["resume_sha256"] = row["content_hash"]
@@ -211,7 +219,8 @@ class Applications:
                 raise ValueError("NOT_FOUND：面试记录不存在。")
             if body["expected_version"] != old["version"]:
                 raise ValueError("VERSION_CONFLICT：本轮面试已更新，请刷新后再删除。")
-            repo.connection.execute("DELETE FROM career_application_interviews WHERE id=? AND application_id=? AND version=?", (interview_id, application_id, old["version"]))
+            if not repo.delete_interview(application_id, interview_id, old["version"]):
+                raise ValueError("VERSION_CONFLICT：本轮面试已更新，请刷新后再删除。")
             repo.update(application_id, {key: app[key] for key in DEFAULTS}, app["version"], self._now())
             repo.event(application_id, "interview_deleted", f"删除真实面试：{old['round_name']}；申请状态与阶段保留", self._now())
             return {"deleted": True}

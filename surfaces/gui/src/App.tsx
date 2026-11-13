@@ -76,6 +76,7 @@ import { subscriptionChatTurn, type SubscriptionChatContext } from "./subscripti
 import { CareerWelcome } from "./components/CareerWelcome";
 import { CareerJobsView } from "./components/CareerJobsView";
 import { ApplicationsView } from "./components/ApplicationsView";
+import { supportsApplications } from "./applicationsSupport";
 import type { InterviewLaunchPayload } from "./components/CareerJobsView";
 import { CareerProfileView } from "./components/CareerProfileView";
 import { ConversationInterviewBar } from "./components/ConversationInterviewBar";
@@ -1706,7 +1707,7 @@ export function App() {
         onOpenCareerProfile={() => {setMobileNavOpen(false);setSurface("profile");}}
         careerJobsActive={surface === "jobs"}
         careerProfileActive={surface === "profile"}
-        onOpenCareerApplications={isLocal() ? () => {setMobileNavOpen(false);setApplicationOpenId(null);setApplicationFromRadar(false);setSurface("applications");} : undefined}
+        onOpenCareerApplications={isLocal() || supportsApplications() ? () => {setMobileNavOpen(false);setApplicationOpenId(null);setApplicationFromRadar(false);setSurface("applications");} : undefined}
         careerApplicationsActive={surface === "applications"}
         collapsed={effectiveNavCollapsed}
         onCollapse={toggleNav}

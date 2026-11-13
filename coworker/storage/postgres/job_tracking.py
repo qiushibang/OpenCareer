@@ -13,6 +13,12 @@ class PostgresJobTrackingRepository:
         self.connection = connection
         self.principal = principal
 
+    def on_tracking_saved(self, tracking: dict) -> None:
+        """Keep the current personal application in step with a direct edit."""
+        from coworker.storage.postgres.applications import tracking_changed
+
+        tracking_changed(self.connection, self.principal, tracking)
+
     def job_exists(self, job_id: str) -> bool:
         return (
             self.connection.execute(

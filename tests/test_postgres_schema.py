@@ -160,6 +160,7 @@ def test_postgres_migrations_are_ordered_and_have_content_hashes() -> None:
         16,
         17,
         18,
+        19,
     ]
     assert migrations[0].name == "initial"
     assert migrations[1].name == "career_tenant_integrity"
@@ -171,6 +172,7 @@ def test_postgres_migrations_are_ordered_and_have_content_hashes() -> None:
     assert migrations[7].name == "job_radar_query_performance"
     assert migrations[8].name == "inbox_resolution_cascade"
     assert migrations[9].name == "authing_identity"
+    assert migrations[18].name == "career_applications"
     assert all(len(migration.sha256) == 64 for migration in migrations)
     assert migrations[0].sql.startswith("CREATE SCHEMA")
 
@@ -319,3 +321,20 @@ def test_apply_migrations_rejects_changed_applied_sql() -> None:
 
     with pytest.raises(RuntimeError, match="checksum"):
         apply_migrations(connection, migrations=(migration,))
+
+
+def test_application_workspace_tables_are_tenant_isolated() -> None:
+    sql = next(m.sql for m in discover_migrations() if m.name == "career_applications")
+    compact = " ".join(sql.split())
+
+    for table in ("applications", "application_interviews", "application_history"):
+        assert f"CREATE TABLE career.{table}" in compact
+    assert "'career.applications'" in compact
+    assert "'career.application_interviews'" in compact
+    assert "'career.application_history'" in compact
+    assert "FORCE ROW LEVEL SECURITY" in compact
+    assert "current_setting(''app.user_id'', true)" in compact
+    # Interviews and history can only attach to the same user's application.
+    assert compact.count("FOREIGN KEY (user_id, application_id)") == 2
+    # At most one live application per user and job.
+    assert "WHERE job_id IS NOT NULL AND is_current" in compact

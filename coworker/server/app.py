@@ -3604,7 +3604,29 @@ def create_app(
     from extensions.career_mcp.catalog_api import router as career_catalog_router
     app.include_router(career_catalog_router())
     from extensions.career_mcp.applications_api import router as career_applications_router
-    app.include_router(career_applications_router())
+
+    def career_applications_service(request: Request):
+        """Per-tenant PostgreSQL service when hosted; None keeps the local-only path."""
+        if (
+            storage_runtime is None
+            or getattr(storage_runtime, "mode", "local") != "postgres"
+        ):
+            return None
+        from coworker.storage.postgres.applications import (
+            PostgresApplicationsRepository,
+        )
+        from extensions.career_mcp.services.applications import Applications
+
+        principal = request.state.principal
+
+        @contextmanager
+        def repository_session():
+            with storage_runtime.database.transaction(principal) as connection:
+                yield PostgresApplicationsRepository(connection, principal)
+
+        return Applications(repository_session=repository_session)
+
+    app.include_router(career_applications_router(career_applications_service))
     return app
 
 

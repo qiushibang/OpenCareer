@@ -131,9 +131,12 @@ class JobTrackingService:
             if saved is None:
                 raise RuntimeError("tracking record was not persisted")
             import sqlite3
-            if isinstance(getattr(repository, "connection", None), sqlite3.Connection) and any(field in values for field in ("application_status", "note")):
-                from ..database.applications_repository import tracking_changed
-                tracking_changed(repository.connection, saved)
+            if any(field in values for field in ("application_status", "note")):
+                if isinstance(getattr(repository, "connection", None), sqlite3.Connection):
+                    from ..database.applications_repository import tracking_changed
+                    tracking_changed(repository.connection, saved)
+                elif hasattr(repository, "on_tracking_saved"):
+                    repository.on_tracking_saved(saved)
             result = {
                 **saved,
                 "events": repository.list_events(normalized_id),
